@@ -180,3 +180,109 @@ kbd {
   color: #059669;
   font-weight: 600;
 }
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #4f46e5;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-percent {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f46e5;
+  min-width: 32px;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  html {
+    color: #e5e7eb;
+  }
+
+  body {
+    background: #1f2937;
+  }
+
+  .title {
+    color: #f3f4f6;
+  }
+
+  label {
+    color: #d1d5db;
+  }
+
+  select {
+    background: #374151;
+    border-color: #4b5563;
+    color: #e5e7eb;
+  }
+
+  textarea {
+    background: #374151;
+    border-color: #4b5563;
+    color: #e5e7eb;
+  }
+
+  .btn-secondary {
+    background: #374151;
+    color: #d1d5db;
+  }
+
+  .btn-secondary:hover {
+    background: #4b5563;
+  }
+
+  .toggle-label {
+    color: #d1d5db;
+  }
+
+  .status-idle {
+    background: #374151;
+    color: #9ca3af;
+  }
+
+  .status-text {
+    color: #9ca3af;
+  }
+
+  .usage-info {
+    background: #374151;
+  }
+
+  .usage-info,
+  .usage-info li {
+    color: #d1d5db;
+  }
+
+  kbd {
+    background: #4b5563;
+    border-color: #6b7280;
+    color: #e5e7eb;
+  }
+
+  .progress-bar {
+    background: #4b5563;
+  }
+
+  .save-status {
+    color: #34d399;
+  }
+}

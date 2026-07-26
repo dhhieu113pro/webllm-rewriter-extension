@@ -16,6 +16,9 @@ const saveBtn = document.getElementById("save-btn") as HTMLButtonElement;
 const saveStatus = document.getElementById("save-status") as HTMLSpanElement;
 const statusIndicator = document.getElementById("status-indicator") as HTMLDivElement;
 const statusText = document.getElementById("status-text") as HTMLParagraphElement;
+const progressContainer = document.getElementById("progress-container") as HTMLDivElement;
+const progressFill = document.getElementById("progress-fill") as HTMLDivElement;
+const progressPercent = document.getElementById("progress-percent") as HTMLSpanElement;
 
 chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
   if (response?.models) {
@@ -59,9 +62,16 @@ chrome.runtime.onMessage.addListener((message) => {
     statusIndicator.textContent = "Loading...";
     statusIndicator.className = "status-badge status-loading";
     statusText.textContent = message.text;
+
+    const pct = Math.round((message.progress || 0) * 100);
+    progressContainer.style.display = "flex";
+    progressFill.style.width = `${pct}%`;
+    progressPercent.textContent = `${pct}%`;
+
     if (message.progress === 1.0) {
       statusIndicator.textContent = "Ready";
       statusIndicator.className = "status-badge status-ready";
+      progressContainer.style.display = "none";
     }
   }
 });
