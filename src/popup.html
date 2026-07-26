@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>WebLLM Rewriter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <h1 class="title">WebLLM Rewriter</h1>
+
+      <div id="status-section" class="section">
+        <div id="status-indicator" class="status-badge">Not loaded</div>
+        <p id="status-text" class="status-text"></p>
+      </div>
+
+      <div class="section">
+        <label for="model-selection">Model</label>
+        <select id="model-selection"></select>
+        <button id="load-model-btn" class="btn btn-primary">Load Model</button>
+      </div>
+
+      <div class="section">
+        <label for="system-prompt">System Prompt</label>
+        <textarea id="system-prompt" rows="4" placeholder="Proofreading prompt..."></textarea>
+        <button id="reset-prompt-btn" class="btn btn-secondary">Reset to Default</button>
+      </div>
+
+      <div class="section">
+        <label class="toggle-label">
+          <input type="checkbox" id="copy-to-clipboard" />
+          <span>Copy to clipboard instead of replacing text</span>
+        </label>
+      </div>
+
+      <div class="section usage-info">
+        <p><strong>Usage:</strong></p>
+        <ul>
+          <li>Double-tap <kbd>Ctrl</kbd> on any text field to rewrite</li>
+          <li>Right-click &rarr; "Proofread with WebLLM"</li>
+          <li><kbd>Escape</kbd> to cancel</li>
+          <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> for undo/redo</li>
+        </ul>
+      </div>
+
+      <button id="save-btn" class="btn btn-primary">Save Settings</button>
+      <span id="save-status" class="save-status"></span>
+    </div>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

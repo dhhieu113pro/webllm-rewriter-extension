@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "WebLLM Rewriter",
+  "version": "0.2.0",
+  "description": "Proofread and rewrite text using local AI (WebLLM)",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "64": "icons/icon-64.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; default-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' data: https://huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co https://raw.githubusercontent.com https://cdn-lfs-us-1.hf.co https://cas-bridge.xethub.hf.co"
+  },
+  "background": {
+    "service_worker": "background.ts",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "WebLLM Rewriter",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "permissions": ["storage", "tabs", "activeTab", "contextMenus"],
+  "host_permissions": ["http://*/", "https://*/"]
+}
