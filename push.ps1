@@ -37,7 +37,8 @@ $remoteUrl = git remote get-url origin 2>$null
 if (-not $remoteUrl) {
     gh repo create $repo --private --source=. --remote=origin --push
 } else {
-    git push origin main
+    $branch = git rev-parse --abbrev-ref HEAD
+    git push origin $branch
 }
 
 Pop-Location
