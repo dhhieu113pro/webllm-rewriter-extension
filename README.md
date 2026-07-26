@@ -1,12 +1,21 @@
-# WebLLM Chrome Extension
+# WebLLM Rewriter Extension
 
-![Chrome Extension](https://github.com/mlc-ai/mlc-llm/assets/11940172/0d94cc73-eff1-4128-a6e4-70dc879f04e0)
+A Chrome extension for text rewriting using local AI via WebLLM. Select text on any webpage and rewrite it using an AI model running entirely in your browser.
 
-To run the extension, do the following steps under this folder
+## Setup
 
 ```bash
 npm install
 npm run build
 ```
 
-This will create a new directory at `chrome-extension/dist/`. To load the extension into Chrome, go to Extensions > Manage Extensions and select Load Unpacked. Add the `chrome-extension/dist/` directory. You can now pin the extension to your toolbar and use the drop-down menu to chat with your favorite model!
+## Load Extension
+
+1. Go to `chrome://extensions/`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select the `dist/` directory
+
+## Usage
+
+Select text on any page, then use the extension popup to rewrite it with a locally-running LLM powered by WebLLM.
