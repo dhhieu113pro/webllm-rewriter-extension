@@ -241,13 +241,12 @@ class TextProcessor {
         port.onMessage.addListener((response) => {
           if (response.error) { port.disconnect(); reject(new Error(response.message || "Unknown error")); return; }
           if (response.chunk) this.accumulatedText += response.chunk;
-          if (this.isSlateEditor || this.inputElement.isContentEditable) {
-            if (response.done) this.updateContent((this.accumulatedText || "").replace(/\r\n/g, "\n").trim());
-          } else {
-            if (response.chunk) this.updateContent(this.accumulatedText);
-            if (response.done) this.updateContent((this.accumulatedText || "").replace(/\r\n/g, "\n").trim());
+          if (response.chunk) this.updateContent(this.accumulatedText);
+          if (response.done) {
+            this.updateContent((this.accumulatedText || "").replace(/\r\n/g, "\n").trim());
+            port.disconnect();
+            resolve();
           }
-          if (response.done) { port.disconnect(); resolve(); }
         });
         port.onDisconnect.addListener(() => reject(new Error("Connection lost")));
         port.postMessage({ text });
