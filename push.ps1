@@ -28,11 +28,17 @@ screenshots/
 git add -A
 git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
-    git commit -m "Initial commit: webllm-rewriter-extension"
+    $msg = if (git log --oneline -1 2>$null) { "Update" } else { "Initial commit: webllm-rewriter-extension" }
+    git commit -m $msg
 }
 
-# Create private repo + push
-gh repo create $repo --private --source=. --remote=origin --push
+# Create repo if not exists, then push
+$remoteUrl = git remote get-url origin 2>$null
+if (-not $remoteUrl) {
+    gh repo create $repo --private --source=. --remote=origin --push
+} else {
+    git push origin main
+}
 
 Pop-Location
 Write-Host "Done: https://github.com/$repo"
