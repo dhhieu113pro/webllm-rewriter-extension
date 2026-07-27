@@ -15,6 +15,19 @@ const DEFAULT_SYSTEM_PROMPT =
 let engine: MLCEngineInterface | null = null;
 let currentModel = DEFAULT_MODEL;
 let isLoading = false;
+let gpuAvailable: boolean | null = null;
+
+async function checkWebGPU(): Promise<boolean> {
+  if (gpuAvailable !== null) return gpuAvailable;
+  try {
+    const adapter = await (navigator as any).gpu?.requestAdapter();
+    gpuAvailable = !!adapter;
+  } catch {
+    gpuAvailable = false;
+  }
+  console.log(`[WebLLM] WebGPU available: ${gpuAvailable}`);
+  return gpuAvailable;
+}
 
 async function getSettings() {
   const result = await chrome.storage.sync.get([
@@ -30,6 +43,11 @@ async function getSettings() {
 }
 
 async function ensureEngine(modelId?: string): Promise<MLCEngineInterface> {
+  const hasGpu = await checkWebGPU();
+  if (!hasGpu) {
+    throw new Error("WebGPU is not available. Please use Chrome 124+ with WebGPU support enabled.");
+  }
+
   const settings = await getSettings();
   const targetModel = modelId || settings.selectedModel;
 
@@ -142,12 +160,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "getEngineStatus") {
-    sendResponse({
-      loaded: !!engine,
-      loading: isLoading,
-      currentModel,
+    checkWebGPU().then((hasGpu) => {
+      sendResponse({
+        loaded: !!engine,
+        loading: isLoading,
+        currentModel,
+        gpuAvailable: hasGpu,
+      });
     });
-    return false;
+    return true;
   }
 
   if (message.type === "loadModel") {

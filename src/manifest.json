@@ -10,7 +10,7 @@
     "128": "icons/icon-128.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; default-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' data: https://huggingface.co https://cdn-lfs.huggingface.co https://cdn-lfs-us-1.huggingface.co https://raw.githubusercontent.com https://cdn-lfs-us-1.hf.co https://cas-bridge.xethub.hf.co"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; default-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' data: https://huggingface.co https://*.huggingface.co https://raw.githubusercontent.com https://*.hf.co"
   },
   "background": {
     "service_worker": "background.ts",

@@ -41,8 +41,18 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
 function updateStatus() {
   chrome.runtime.sendMessage({ type: "getEngineStatus" }, (response) => {
     if (!response) return;
+
+    // Show GPU status
+    if (response.gpuAvailable === false) {
+      statusText.textContent = "⚠ WebGPU not available. Chrome 124+ required.";
+      statusIndicator.textContent = "No GPU";
+      statusIndicator.className = "status-badge status-error";
+      loadModelBtn.disabled = true;
+      return;
+    }
+
     if (response.loaded) {
-      statusIndicator.textContent = "Ready";
+      statusIndicator.textContent = "Ready (GPU)";
       statusIndicator.className = "status-badge status-ready";
       statusText.textContent = `Model: ${response.currentModel}`;
     } else if (response.loading) {
@@ -51,7 +61,7 @@ function updateStatus() {
     } else {
       statusIndicator.textContent = "Not loaded";
       statusIndicator.className = "status-badge status-idle";
-      statusText.textContent = "Click 'Load Model' to start";
+      statusText.textContent = "Click 'Load Model' to start (WebGPU)";
     }
   });
 }
