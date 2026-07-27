@@ -89,7 +89,12 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Proofread with WebLLM",
     contexts: ["editable"],
   });
+  // Auto-load model on install
+  ensureEngine().catch((e) => console.warn("[WebLLM] Auto-load failed:", e.message));
 });
+
+// Auto-load model when service worker starts (e.g. after browser restart)
+ensureEngine().catch((e) => console.warn("[WebLLM] Auto-load failed:", e.message));
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "webllm-proofread" && tab?.id) {
