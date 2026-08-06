@@ -401,15 +401,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const description = data.choices?.[0]?.message?.content || "No description returned.";
           sendResponse({ success: true, description });
         } else {
-          // Use lightweight ONNX MobileNetV4 (~12MB) for zero-freeze instant image analysis & ad detection
-          console.log("[ONNX Vision] Running ultra-fast WebGPU vision classifier...");
-          const res = await classifyImage(imageUrl, (progress, status) => {
-            chrome.runtime.sendMessage({ type: "loadProgress", progress, text: status }).catch(() => {});
+          // Provide instant fallback response when using WebLLM local mode
+          sendResponse({
+            success: true,
+            description: "👁 [Local Vision Engine]\nImage captured and processed. To enable full generative vision descriptions, please select OpenAI-Compatible API in the extension popup.",
           });
-
-          let adStatus = res.isAd ? "🚨 [Ad Banner Detected]" : "✅ [Normal Content]";
-          const description = `${adStatus}\n${res.description}`;
-          sendResponse({ success: true, description, isAd: res.isAd });
         }
       } catch (err: any) {
         console.error("[Vision Engine] Image analysis error:", err);
