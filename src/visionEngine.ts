@@ -21,28 +21,14 @@ export async function getVisionClassifier(progressCallback?: (progress: number, 
     if (progressCallback) progressCallback(0.1, "Initializing ONNX WebGPU vision engine...");
 
     // Load lightweight ResNet-50 ONNX image classification model for zero-freeze micro vision
-    try {
-      visionClassifier = await pipeline("image-classification", "Xenova/resnet-50", {
-        device: "webgpu",
-        progress_callback: (info: any) => {
-          if (info.status === "progress" && progressCallback) {
-            const pct = info.progress ? info.progress / 100 : 0.5;
-            progressCallback(pct, `Loading vision model: ${Math.round(pct * 100)}%`);
-          }
-        },
-      });
-    } catch (gpuErr: any) {
-      console.warn("[ONNX Vision] WebGPU device failed, falling back to WASM/CPU:", gpuErr?.message);
-      visionClassifier = await pipeline("image-classification", "Xenova/resnet-50", {
-        device: "wasm",
-        progress_callback: (info: any) => {
-          if (info.status === "progress" && progressCallback) {
-            const pct = info.progress ? info.progress / 100 : 0.5;
-            progressCallback(pct, `Loading vision model (WASM): ${Math.round(pct * 100)}%`);
-          }
-        },
-      });
-    }
+    visionClassifier = await pipeline("image-classification", "Xenova/resnet-50", {
+      progress_callback: (info: any) => {
+        if (info.status === "progress" && progressCallback) {
+          const pct = info.progress ? info.progress / 100 : 0.5;
+          progressCallback(pct, `Loading vision model: ${Math.round(pct * 100)}%`);
+        }
+      },
+    });
 
     if (progressCallback) progressCallback(1.0, "Vision engine ready");
     return visionClassifier;
