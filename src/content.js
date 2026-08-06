@@ -773,15 +773,30 @@ class ImageVisionManager {
 
   async getImageDataUrl(img) {
     try {
-      if (img.src.startsWith("data:image/")) {
-        return img.src;
+      const origW = img.naturalWidth || img.width || 400;
+      const origH = img.naturalHeight || img.height || 300;
+
+      // Downscale to max 640px long edge to prevent GPU RAM spike & PC freeze
+      const maxDim = 640;
+      let targetW = origW;
+      let targetH = origH;
+
+      if (targetW > maxDim || targetH > maxDim) {
+        if (targetW > targetH) {
+          targetH = Math.round((targetH * maxDim) / targetW);
+          targetW = maxDim;
+        } else {
+          targetW = Math.round((targetW * maxDim) / targetH);
+          targetH = maxDim;
+        }
       }
+
       const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth || img.width || 400;
-      canvas.height = img.naturalHeight || img.height || 300;
+      canvas.width = targetW;
+      canvas.height = targetH;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      return canvas.toDataURL("image/jpeg", 0.85);
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      return canvas.toDataURL("image/jpeg", 0.75);
     } catch (err) {
       console.warn("[WebLLM Vision] Canvas conversion failed, fallback to src:", err);
       return img.src;
