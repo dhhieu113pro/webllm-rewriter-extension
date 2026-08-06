@@ -834,6 +834,28 @@ class ImageVisionManager {
     document.body.appendChild(modal);
     this.activeModal = modal;
 
+    // Listen for model load progress updates
+    const progressListener = (msg) => {
+      if (msg.type === "loadProgress" && this.activeModal) {
+        const bodyEl = this.activeModal.querySelector(".webllm-modal-body");
+        if (bodyEl) {
+          const pct = Math.round((msg.progress || 0) * 100);
+          bodyEl.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:6px; color:#94a3b8;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-block; width:12px; height:12px; border:2px solid #818cf8; border-top-color:transparent; border-radius:50%; animation:webllm-spin 0.8s linear infinite;"></span>
+                <span>${msg.text || "Loading model weights..."}</span>
+              </div>
+              <div style="width:100%; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden;">
+                <div style="width:${pct}%; height:100%; background:#6366f1; transition:width 0.2s;"></div>
+              </div>
+            </div>
+          `;
+        }
+      }
+    };
+    chrome.runtime.onMessage.addListener(progressListener);
+
     const dataUrl = await this.getImageDataUrl(img);
 
     chrome.runtime.sendMessage(
@@ -843,6 +865,7 @@ class ImageVisionManager {
         prompt: "Describe what is inside this image in detail.",
       },
       (res) => {
+        chrome.runtime.onMessage.removeListener(progressListener);
         const bodyEl = modal.querySelector(".webllm-modal-body");
         if (!bodyEl) return;
 

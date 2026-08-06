@@ -399,7 +399,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const description = data.choices?.[0]?.message?.content || "No description returned.";
           sendResponse({ success: true, description });
         } else {
-          const llmEngine = await ensureEngine();
+          const targetModel = config.webllm?.model || config.selectedModel || DEFAULT_WEBLLM_MODEL;
+          console.log(`[WebLLM Vision] Ensuring engine for model: ${targetModel}`);
+          const llmEngine = await ensureEngine(targetModel);
+
+          console.log(`[WebLLM Vision] Sending image completion request...`);
           const completion = await llmEngine.chat.completions.create({
             stream: false,
             messages: [
