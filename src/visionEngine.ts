@@ -20,8 +20,8 @@ export async function getVisionClassifier(progressCallback?: (progress: number, 
   try {
     if (progressCallback) progressCallback(0.1, "Initializing ONNX WebGPU vision engine...");
 
-    // Load lightweight MobileNetV4 image classification model (~12MB) for zero-freeze micro vision
-    visionClassifier = await pipeline("image-classification", "Xenova/mobilenetv4_conv_small.e2400_r224_in1k", {
+    // Load lightweight ResNet-50 ONNX image classification model for zero-freeze micro vision
+    visionClassifier = await pipeline("image-classification", "Xenova/resnet-50", {
       device: "webgpu",
       progress_callback: (info: any) => {
         if (info.status === "progress" && progressCallback) {
