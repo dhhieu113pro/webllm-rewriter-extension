@@ -360,6 +360,69 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "analyzeImage") {
+    (async () => {
+      try {
+        const config = await getConfig();
+        const prompt = message.prompt || "Describe what is inside this image in detail.";
+        const imageUrl = message.imageUrl;
+
+        if (config.provider === "openaiCompatible") {
+          const configManager = new ApiConfigManager(config);
+          configManager.validate();
+          const { apiUrl, headers, chosenModel } = configManager.getApiConfig();
+
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              model: chosenModel,
+              stream: false,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: prompt },
+                    { type: "image_url", image_url: { url: imageUrl } },
+                  ],
+                },
+              ],
+            }),
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errText}`);
+          }
+
+          const data = await response.json();
+          const description = data.choices?.[0]?.message?.content || "No description returned.";
+          sendResponse({ success: true, description });
+        } else {
+          const llmEngine = await ensureEngine();
+          const completion = await llmEngine.chat.completions.create({
+            stream: false,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  { type: "image_url", image_url: { url: imageUrl } },
+                ] as any,
+              },
+            ],
+          });
+          const description = completion.choices[0]?.message?.content || "No description returned.";
+          sendResponse({ success: true, description });
+        }
+      } catch (err: any) {
+        console.error("[WebLLM Vision] Image analysis error:", err);
+        sendResponse({ error: err.message || "Failed to analyze image" });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === "loadModel") {
     ensureEngine(message.modelId)
       .then(() => sendResponse({ success: true }))

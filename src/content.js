@@ -685,4 +685,194 @@ class InputHandler {
   }
 }
 
+class ImageVisionManager {
+  constructor() {
+    this.processedImages = new WeakSet();
+    this.activeModal = null;
+    this.initObserver();
+    this.scanImages();
+  }
+
+  initObserver() {
+    const observer = new MutationObserver(() => this.scanImages());
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", () => this.scanImages());
+  }
+
+  scanImages() {
+    const images = Array.from(document.querySelectorAll("img"));
+    images.forEach((img) => {
+      if (this.processedImages.has(img)) return;
+
+      const checkAndAddBadge = () => {
+        if (img.width >= 300 || img.naturalWidth >= 300) {
+          this.processedImages.add(img);
+          this.attachBadge(img);
+        }
+      };
+
+      if (img.complete) {
+        checkAndAddBadge();
+      } else {
+        img.addEventListener("load", checkAndAddBadge, { once: true });
+      }
+    });
+  }
+
+  attachBadge(img) {
+    if (img.dataset.webllmVisionBadge) return;
+    img.dataset.webllmVisionBadge = "true";
+
+    let parent = img.parentElement;
+    if (!parent) return;
+
+    const compStyle = window.getComputedStyle(parent);
+    if (compStyle.position === "static") {
+      parent.style.position = "relative";
+    }
+
+    const badge = document.createElement("button");
+    badge.className = "webllm-vision-badge";
+    badge.innerHTML = `👁 Describe`;
+    Object.assign(badge.style, {
+      position: "absolute",
+      top: "8px",
+      right: "8px",
+      zIndex: "2147483640",
+      background: "rgba(30, 41, 59, 0.82)",
+      color: "#f8fafc",
+      border: "1px solid rgba(255, 255, 255, 0.25)",
+      borderRadius: "999px",
+      padding: "4px 10px",
+      fontSize: "11px",
+      fontWeight: "600",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      cursor: "pointer",
+      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+      backdropFilter: "blur(8px)",
+      transition: "all 0.2s ease",
+    });
+
+    badge.addEventListener("mouseenter", () => {
+      badge.style.background = "rgba(79, 70, 229, 0.92)";
+      badge.style.transform = "scale(1.05)";
+    });
+    badge.addEventListener("mouseleave", () => {
+      badge.style.background = "rgba(30, 41, 59, 0.82)";
+      badge.style.transform = "scale(1)";
+    });
+
+    badge.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.analyzeAndShowModal(img);
+    });
+
+    parent.appendChild(badge);
+  }
+
+  async getImageDataUrl(img) {
+    try {
+      if (img.src.startsWith("data:image/")) {
+        return img.src;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width || 400;
+      canvas.height = img.naturalHeight || img.height || 300;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      return canvas.toDataURL("image/jpeg", 0.85);
+    } catch (err) {
+      console.warn("[WebLLM Vision] Canvas conversion failed, fallback to src:", err);
+      return img.src;
+    }
+  }
+
+  async analyzeAndShowModal(img) {
+    this.closeModal();
+
+    const modal = document.createElement("div");
+    modal.className = "webllm-vision-modal";
+    Object.assign(modal.style, {
+      position: "fixed",
+      bottom: "24px",
+      right: "24px",
+      width: "360px",
+      maxHeight: "420px",
+      zIndex: "2147483647",
+      background: "rgba(15, 23, 42, 0.88)",
+      color: "#f8fafc",
+      borderRadius: "16px",
+      padding: "16px",
+      boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15)",
+      backdropFilter: "blur(16px)",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      animation: "webllm-modal-fade 0.3s ease-out",
+    });
+
+    modal.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 8px;">
+        <span style="font-weight:700; font-size:13px; color:#e2e8f0; display:flex; align-items:center; gap:6px;">
+          👁 Image Analysis
+        </span>
+        <button class="webllm-modal-close" style="background:none; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:0 4px;">&times;</button>
+      </div>
+      <div class="webllm-modal-body" style="font-size:12px; line-height:1.6; color:#cbd5e1; overflow-y:auto; flex:1; max-height:300px;">
+        <div style="display:flex; align-items:center; gap:8px; color:#94a3b8;">
+          <span style="display:inline-block; width:12px; height:12px; border:2px solid #818cf8; border-top-color:transparent; border-radius:50%; animation:webllm-spin 0.8s linear infinite;"></span>
+          Analyzing image contents...
+        </div>
+      </div>
+    `;
+
+    const closeBtn = modal.querySelector(".webllm-modal-close");
+    closeBtn.addEventListener("click", () => this.closeModal());
+
+    document.body.appendChild(modal);
+    this.activeModal = modal;
+
+    const dataUrl = await this.getImageDataUrl(img);
+
+    chrome.runtime.sendMessage(
+      {
+        type: "analyzeImage",
+        imageUrl: dataUrl,
+        prompt: "Describe what is inside this image in detail.",
+      },
+      (res) => {
+        const bodyEl = modal.querySelector(".webllm-modal-body");
+        if (!bodyEl) return;
+
+        if (res?.error) {
+          bodyEl.innerHTML = `<span style="color:#f87171;">⚠️ ${res.error}</span>`;
+        } else if (res?.description) {
+          bodyEl.textContent = res.description;
+        } else {
+          bodyEl.textContent = "No description received.";
+        }
+      }
+    );
+  }
+
+  closeModal() {
+    if (this.activeModal) {
+      this.activeModal.remove();
+      this.activeModal = null;
+    }
+  }
+}
+
+// Add CSS keyframe for spinner
+const spinStyle = document.createElement("style");
+spinStyle.textContent = `
+  @keyframes webllm-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  @keyframes webllm-modal-fade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+`;
+document.documentElement.appendChild(spinStyle);
+
 new InputHandler();
+new ImageVisionManager();
+
