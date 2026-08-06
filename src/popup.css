@@ -41,14 +41,38 @@ label {
   color: #374151;
 }
 
-select {
+select,
+.input-field {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   font-size: 12px;
   background: #fff;
-  margin-bottom: 6px;
+}
+
+.input-with-reset {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.input-with-reset .input-field {
+  flex: 1;
+}
+
+.btn-reset {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #f3f4f6;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-reset:hover {
+  background: #e5e7eb;
 }
 
 textarea {
@@ -60,7 +84,6 @@ textarea {
   font-family: inherit;
   resize: vertical;
   min-height: 80px;
-  margin-bottom: 6px;
 }
 
 .btn {
@@ -229,10 +252,21 @@ kbd {
     color: #d1d5db;
   }
 
-  select {
+  select,
+  .input-field {
     background: #374151;
     border-color: #4b5563;
     color: #e5e7eb;
+  }
+
+  .btn-reset {
+    background: #4b5563;
+    border-color: #6b7280;
+    color: #e5e7eb;
+  }
+
+  .btn-reset:hover {
+    background: #6b7280;
   }
 
   textarea {

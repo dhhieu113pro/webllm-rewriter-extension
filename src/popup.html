@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebLLM Rewriter</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
@@ -9,27 +10,56 @@
     <div class="popup-container">
       <h1 class="title">WebLLM Rewriter</h1>
 
-      <div id="status-section" class="section">
-        <div id="status-indicator" class="status-badge">Not loaded</div>
-        <div id="progress-container" class="progress-container" style="display:none">
-          <div class="progress-bar">
-            <div id="progress-fill" class="progress-fill"></div>
-          </div>
-          <span id="progress-percent" class="progress-percent">0%</span>
-        </div>
-        <p id="status-text" class="status-text"></p>
-      </div>
+      <div id="error-container" class="status-text" style="display: none; color: #ff6b6b; margin-bottom: 8px;"></div>
 
       <div class="section">
-        <label for="model-selection">Model</label>
+        <label for="provider-select">Provider</label>
+        <select id="provider-select">
+          <option value="webllm" selected>Web-LLM (Local WebGPU)</option>
+          <option value="openaiCompatible">OpenAI Compatible API</option>
+        </select>
+      </div>
+
+      <!-- WebLLM Section -->
+      <div id="webllm-group" class="section">
+        <div id="status-section">
+          <div id="status-indicator" class="status-badge">Not loaded</div>
+          <div id="progress-container" class="progress-container" style="display:none">
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <span id="progress-percent" class="progress-percent">0%</span>
+          </div>
+          <p id="status-text" class="status-text"></p>
+        </div>
+
+        <label for="model-selection">Local Model</label>
         <select id="model-selection"></select>
-        <button id="load-model-btn" class="btn btn-primary">Load Model</button>
+        <button id="load-model-btn" class="btn btn-primary" style="margin-top: 8px;">Load Model</button>
+      </div>
+
+      <!-- OpenAI Compatible Section -->
+      <div id="openai-group" class="section" style="display: none;">
+        <label for="openai-key-input">API Key</label>
+        <input id="openai-key-input" type="password" placeholder="sk-..." class="input-field" />
+
+        <label for="openai-url-input" style="margin-top: 8px;">Base URL</label>
+        <div class="input-with-reset">
+          <input id="openai-url-input" type="text" placeholder="https://api.openai.com/v1" class="input-field" />
+          <button id="reset-url-btn" class="btn-reset" type="button" style="display: none;">Reset</button>
+        </div>
+
+        <label for="openai-model-input" style="margin-top: 8px;">Model Name</label>
+        <div class="input-with-reset">
+          <input id="openai-model-input" type="text" placeholder="gpt-4o-mini" class="input-field" />
+          <button id="reset-model-btn" class="btn-reset" type="button" style="display: none;">Reset</button>
+        </div>
       </div>
 
       <div class="section">
         <label for="system-prompt">System Prompt</label>
         <textarea id="system-prompt" rows="4" placeholder="Proofreading prompt..."></textarea>
-        <button id="reset-prompt-btn" class="btn btn-secondary">Reset to Default</button>
+        <button id="reset-prompt-btn" class="btn btn-secondary" style="margin-top: 6px;">Reset to Default</button>
       </div>
 
       <div class="section">
@@ -43,7 +73,7 @@
         <p><strong>Usage:</strong></p>
         <ul>
           <li>Double-tap <kbd>Ctrl</kbd> on any text field to rewrite</li>
-          <li>Right-click &rarr; "Proofread with WebLLM"</li>
+          <li>Right-click &rarr; "Proofread with WebLLM / OpenAI"</li>
           <li><kbd>Escape</kbd> to cancel</li>
           <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> for undo/redo</li>
         </ul>
