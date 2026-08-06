@@ -399,8 +399,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const description = data.choices?.[0]?.message?.content || "No description returned.";
           sendResponse({ success: true, description });
         } else {
-          const targetModel = config.webllm?.model || config.selectedModel || DEFAULT_WEBLLM_MODEL;
-          console.log(`[WebLLM Vision] Ensuring engine for model: ${targetModel}`);
+          let targetModel = config.webllm?.model || config.selectedModel || DEFAULT_WEBLLM_MODEL;
+          const isVision = targetModel.toLowerCase().includes("vision") || targetModel.toLowerCase().includes("vl") || targetModel.toLowerCase().includes("llava");
+          
+          if (!isVision) {
+            console.warn(`[WebLLM Vision] Selected model (${targetModel}) does not support vision. Auto-switching to Phi-3.5-vision-instruct-q4f16_1-MLC`);
+            targetModel = "Phi-3.5-vision-instruct-q4f16_1-MLC";
+          }
+
+          console.log(`[WebLLM Vision] Ensuring engine for vision model: ${targetModel}`);
           const llmEngine = await ensureEngine(targetModel);
 
           console.log(`[WebLLM Vision] Sending image completion request...`);
