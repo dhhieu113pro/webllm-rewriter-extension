@@ -362,58 +362,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === "analyzeImage") {
-    (async () => {
-      try {
-        const config = await getConfig();
-        const prompt = message.prompt || "Describe what is inside this image in detail.";
-        const imageUrl = message.imageUrl;
 
-        if (config.provider === "openaiCompatible") {
-          const configManager = new ApiConfigManager(config);
-          configManager.validate();
-          const { apiUrl, headers, chosenModel } = configManager.getApiConfig();
-
-          const response = await fetch(apiUrl, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              model: chosenModel,
-              stream: false,
-              messages: [
-                {
-                  role: "user",
-                  content: [
-                    { type: "text", text: prompt },
-                    { type: "image_url", image_url: { url: imageUrl } },
-                  ],
-                },
-              ],
-            }),
-          });
-
-          if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errText}`);
-          }
-
-          const data = await response.json();
-          const description = data.choices?.[0]?.message?.content || "No description returned.";
-          sendResponse({ success: true, description });
-        } else {
-          // Provide instant fallback response when using WebLLM local mode
-          sendResponse({
-            success: true,
-            description: "👁 [Local Vision Engine]\nImage captured and processed. To enable full generative vision descriptions, please select OpenAI-Compatible API in the extension popup.",
-          });
-        }
-      } catch (err: any) {
-        console.error("[Vision Engine] Image analysis error:", err);
-        sendResponse({ error: err.message || "Failed to analyze image" });
-      }
-    })();
-    return true;
-  }
 
   if (message.type === "loadModel") {
     ensureEngine(message.modelId)
