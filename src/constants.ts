@@ -33,11 +33,11 @@ export const DEFAULT_OPENAI_COMPATIBLE_MODEL = "gpt-4o-mini";
 export const DEFAULT_OPENAI_COMPATIBLE_URL = "https://api.openai.com/v1";
 
 export const WEBLLM_MODELS: Record<string, { label: string; size: string }> = {
-  "Qwen2.5-1.5B-Instruct-q4f16_1-MLC": { label: "Qwen2.5 1.5B (tiny, fastest)", size: "~1GB" },
-  "Phi-3.5-mini-instruct-q4f16_1-MLC": { label: "Phi-3.5 Mini 3.8B (fast)", size: "~2.3GB" },
+  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC": { label: "Qwen2.5 0.5B (ultra-fast)", size: "~350MB" },
+  "Qwen3.5-0.8B-q4f16_1-MLC": { label: "Qwen3.5 0.8B (fast)", size: "~550MB" },
 };
 
-export const DEFAULT_WEBLLM_MODEL = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC";
+export const DEFAULT_WEBLLM_MODEL = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
 
 export interface ProviderConfig {
   defaultModel: string;

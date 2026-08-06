@@ -132,7 +132,17 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
   familySelector.innerHTML = "";
 
   if (response?.models) {
-    response.models.forEach((modelId: string) => {
+    const allowedModels = response.models.filter((modelId: string) => {
+      const id = modelId.toLowerCase();
+      return (
+        id.includes("gemma-3") ||
+        id.includes("gemma3") ||
+        modelId === "Qwen3.5-0.8B-q4f16_1-MLC" ||
+        modelId === "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
+      );
+    });
+
+    allowedModels.forEach((modelId: string) => {
       const family = getFamilyName(modelId);
       if (!familyMap.has(family)) {
         familyMap.set(family, []);
