@@ -14,7 +14,8 @@ const providerSelect = document.getElementById("provider-select") as HTMLSelectE
 const webllmGroup = document.getElementById("webllm-group") as HTMLDivElement;
 const openaiGroup = document.getElementById("openai-group") as HTMLDivElement;
 
-const modelSelector = document.getElementById("model-selection") as HTMLSelectElement;
+const familySelector = document.getElementById("family-selection") as HTMLSelectElement;
+const instanceSelector = document.getElementById("instance-selection") as HTMLSelectElement;
 const loadModelBtn = document.getElementById("load-model-btn") as HTMLButtonElement;
 
 const openaiKeyInput = document.getElementById("openai-key-input") as HTMLInputElement;
@@ -35,6 +36,49 @@ const statusText = document.getElementById("status-text") as HTMLParagraphElemen
 const progressContainer = document.getElementById("progress-container") as HTMLDivElement;
 const progressFill = document.getElementById("progress-fill") as HTMLDivElement;
 const progressPercent = document.getElementById("progress-percent") as HTMLSpanElement;
+
+// Mapping of family -> model IDs
+let familyMap: Map<string, string[]> = new Map();
+
+function isVisionModel(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  return id.includes("vision") || id.includes("vl") || id.includes("llava") || id.includes("pixtral");
+}
+
+function isToolModel(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  return id.includes("hermes") || id.includes("function") || id.includes("tool") || id.includes("agent");
+}
+
+function getModelTags(modelId: string): string {
+  const tags: string[] = [];
+  if (isVisionModel(modelId)) tags.push("(vision)");
+  if (isToolModel(modelId)) tags.push("(tool)");
+  return tags.length > 0 ? ` ${tags.join(" ")}` : "";
+}
+
+function getFamilyTags(instances: string[]): string {
+  const tags: string[] = [];
+  if (instances.some(isVisionModel)) tags.push("(vision)");
+  if (instances.some(isToolModel)) tags.push("(tool)");
+  return tags.length > 0 ? ` ${tags.join(" ")}` : "";
+}
+
+function updateInstanceOptions(selectedFamily: string, selectedModelId?: string) {
+  instanceSelector.innerHTML = "";
+  const instances = familyMap.get(selectedFamily) || [];
+  instances.forEach((modelId) => {
+    const opt = document.createElement("option");
+    opt.value = modelId;
+    opt.textContent = `${modelId}${getModelTags(modelId)}`;
+    instanceSelector.appendChild(opt);
+  });
+  if (selectedModelId && instances.includes(selectedModelId)) {
+    instanceSelector.value = selectedModelId;
+  } else if (instances.length > 0) {
+    instanceSelector.value = instances[0];
+  }
+}
 
 async function getEncryptionKey(): Promise<CryptoKey> {
   let storedKey = await chrome.storage.local.get(["encKey"]);
@@ -77,19 +121,46 @@ function toggleProviderUI() {
   }
 }
 
+function getFamilyName(modelId: string): string {
+  const clean = modelId.split("/").pop() || modelId;
+  const parts = clean.split("-");
+  return parts[0] || clean;
+}
+
 chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
+  familyMap.clear();
+  familySelector.innerHTML = "";
+
   if (response?.models) {
     response.models.forEach((modelId: string) => {
+      const family = getFamilyName(modelId);
+      if (!familyMap.has(family)) {
+        familyMap.set(family, []);
+      }
+      familyMap.get(family)!.push(modelId);
+    });
+
+    familyMap.forEach((instances, family) => {
       const opt = document.createElement("option");
-      opt.value = modelId;
-      opt.textContent = modelId;
-      modelSelector.appendChild(opt);
+      opt.value = family;
+      opt.textContent = `${family}${getFamilyTags(instances)}`;
+      familySelector.appendChild(opt);
     });
   }
 
   chrome.storage.sync.get(null, async (result) => {
     providerSelect.value = result.provider || "webllm";
-    modelSelector.value = result.webllm?.model || result.selectedModel || DEFAULT_WEBLLM_MODEL;
+    const savedModel = result.webllm?.model || result.selectedModel || DEFAULT_WEBLLM_MODEL;
+    const savedFamily = getFamilyName(savedModel);
+
+    if (familyMap.has(savedFamily)) {
+      familySelector.value = savedFamily;
+    } else if (familySelector.options.length > 0) {
+      familySelector.value = familySelector.options[0].value;
+    }
+
+    updateInstanceOptions(familySelector.value, savedModel);
+
     systemPromptEl.value = result.systemPrompt || DEFAULT_PROOFREAD_PROMPT;
     copyToClipboardEl.checked = result.copyToClipboard || false;
 
@@ -153,6 +224,10 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
+familySelector.addEventListener("change", () => {
+  updateInstanceOptions(familySelector.value);
+});
+
 providerSelect.addEventListener("change", () => {
   toggleProviderUI();
 });
@@ -171,7 +246,7 @@ resetModelBtn.addEventListener("click", () => {
 });
 
 loadModelBtn.addEventListener("click", () => {
-  const modelId = modelSelector.value;
+  const modelId = instanceSelector.value;
   loadModelBtn.disabled = true;
   loadModelBtn.textContent = "Loading...";
   statusText.textContent = "Initializing...";
@@ -197,8 +272,8 @@ saveBtn.addEventListener("click", async () => {
   const provider = providerSelect.value;
   const syncSettings = {
     provider,
-    selectedModel: modelSelector.value,
-    webllm: { model: modelSelector.value },
+    selectedModel: instanceSelector.value,
+    webllm: { model: instanceSelector.value },
     openaiCompatible: {
       url: openaiUrlInput.value.trim() || DEFAULT_OPENAI_COMPATIBLE_URL,
       model: openaiModelInput.value.trim() || DEFAULT_OPENAI_COMPATIBLE_MODEL,
