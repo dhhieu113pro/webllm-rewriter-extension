@@ -13,12 +13,19 @@
     "@parcel/config-webextension": "^2.9.3",
     "@types/chrome": "^0.0.242",
     "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.1",
+    "events": "^3.3.0",
+    "os-browserify": "^0.3.0",
     "parcel": "^2.9.3",
+    "path-browserify": "^1.0.1",
     "process": "^0.11.10",
-    "sharp": "^0.35.3",
-    "url": "^0.11.1"
+    "stream-browserify": "^3.0.0",
+    "url": "^0.11.1",
+    "util": "^0.12.5"
   },
   "dependencies": {
-    "@mlc-ai/web-llm": "^0.2.84"
+    "@huggingface/transformers": "3.0.0-alpha.0",
+    "@mlc-ai/web-llm": "^0.2.84",
+    "onnxruntime-web": "1.29.0-dev.20260724-ed98916356"
   }
 }

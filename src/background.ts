@@ -16,6 +16,8 @@ import {
   DEFAULT_OPENAI_COMPATIBLE_URL,
 } from "./constants";
 
+import { classifyImage } from "./visionEngine";
+
 let engine: MLCEngineInterface | null = null;
 let currentModel = DEFAULT_WEBLLM_MODEL;
 let isLoading = false;
@@ -399,35 +401,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const description = data.choices?.[0]?.message?.content || "No description returned.";
           sendResponse({ success: true, description });
         } else {
-          let targetModel = config.webllm?.model || config.selectedModel || DEFAULT_WEBLLM_MODEL;
-          const isVision = targetModel.toLowerCase().includes("vision") || targetModel.toLowerCase().includes("vl") || targetModel.toLowerCase().includes("llava");
-          
-          if (!isVision) {
-            console.warn(`[WebLLM Vision] Selected model (${targetModel}) does not support vision. Auto-switching to Phi-3.5-vision-instruct-q4f16_1-MLC`);
-            targetModel = "Phi-3.5-vision-instruct-q4f16_1-MLC";
-          }
-
-          console.log(`[WebLLM Vision] Ensuring engine for vision model: ${targetModel}`);
-          const llmEngine = await ensureEngine(targetModel);
-
-          console.log(`[WebLLM Vision] Sending image completion request...`);
-          const completion = await llmEngine.chat.completions.create({
-            stream: false,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: prompt },
-                  { type: "image_url", image_url: { url: imageUrl } },
-                ] as any,
-              },
-            ],
+          // Use lightweight ONNX MobileNetV4 (~12MB) for zero-freeze instant image analysis & ad detection
+          console.log("[ONNX Vision] Running ultra-fast WebGPU vision classifier...");
+          const res = await classifyImage(imageUrl, (progress, status) => {
+            chrome.runtime.sendMessage({ type: "loadProgress", progress, text: status }).catch(() => {});
           });
-          const description = completion.choices[0]?.message?.content || "No description returned.";
-          sendResponse({ success: true, description });
+
+          let adStatus = res.isAd ? "🚨 [Ad Banner Detected]" : "✅ [Normal Content]";
+          const description = `${adStatus}\n${res.description}`;
+          sendResponse({ success: true, description, isAd: res.isAd });
         }
       } catch (err: any) {
-        console.error("[WebLLM Vision] Image analysis error:", err);
+        console.error("[Vision Engine] Image analysis error:", err);
         sendResponse({ error: err.message || "Failed to analyze image" });
       }
     })();
