@@ -159,6 +159,17 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
       );
     });
 
+    // Pin Qwen2.5-1.5B explicitly for Vietnamese/multilingual support if available
+    const preferred = [
+      "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+      "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
+      "Qwen2.5-1.5B-Instruct-q0f16-MLC",
+    ];
+    const extraModels = preferred.filter(
+      (m) => !allowedModels.includes(m)
+    );
+    allowedModels.push(...extraModels);
+
     allowedModels.forEach((modelId: string) => {
       const family = getFamilyName(modelId);
       if (!familyMap.has(family)) {
