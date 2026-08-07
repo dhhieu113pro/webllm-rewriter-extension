@@ -697,15 +697,20 @@ class AdoWorkItemSummarizer {
     this.currentRequestId = 0;
     this.activePort = null;
     this._targetLanguage = "English";
+    this._autoDelay = 4000;
     this._scrollAutoTriggered = false;
     this._cleanupScrollTrigger = null;
-    // Load language preference
-    chrome.storage.sync.get(["adoTargetLanguage"], (res) => {
+    // Load language preference and delay
+    chrome.storage.sync.get(["adoTargetLanguage", "adoAutoDelay"], (res) => {
       this._targetLanguage = res.adoTargetLanguage || "English";
+      this._autoDelay = typeof res.adoAutoDelay === "number" ? res.adoAutoDelay : 4000;
     });
     chrome.storage.onChanged.addListener((changes) => {
       if (changes.adoTargetLanguage) {
         this._targetLanguage = changes.adoTargetLanguage.newValue || "English";
+      }
+      if (changes.adoAutoDelay) {
+        this._autoDelay = typeof changes.adoAutoDelay.newValue === "number" ? changes.adoAutoDelay.newValue : 4000;
       }
     });
     this.initObserver();
@@ -984,11 +989,11 @@ class AdoWorkItemSummarizer {
         document.removeEventListener("scroll", onScroll);
         if (this._scrollAutoTriggered) return;
         this._scrollAutoTriggered = true;
-        // Small delay to let comments render
+        // Delay to let comments render, using configurable delay from settings (defaults to 4000ms)
         setTimeout(() => {
           const genBtn = document.getElementById("webllm-inline-generate-btn");
           if (genBtn) genBtn.click();
-        }, 1000);
+        }, this._autoDelay);
       }
     };
 

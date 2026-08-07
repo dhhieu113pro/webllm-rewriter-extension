@@ -211,7 +211,7 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
 
     // Work Item Summary settings
     adoAutoSummaryToggle.checked = result.adoAutoSummary !== false;
-    adoAutoDelayInput.value = String(typeof result.adoAutoDelay === "number" ? result.adoAutoDelay : 1000);
+    adoAutoDelayInput.value = String(typeof result.adoAutoDelay === "number" ? result.adoAutoDelay : 4000);
     adoTargetLanguageSelect.value = result.adoTargetLanguage || "English";
     adoSummaryPromptEl.value = result.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
 
