@@ -313,6 +313,7 @@ chrome.runtime.onConnect.addListener((port) => {
     });
 
     port.onMessage.addListener(async (msg) => {
+      const { descriptionText, acceptanceCriteriaText, commentsText, targetLanguage } = msg;
       const language = targetLanguage || "English";
       const isVietnamese = language === "Vietnamese";
       const headerSummary = isVietnamese ? "Tóm tắt" : "Summary";
