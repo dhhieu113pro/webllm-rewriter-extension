@@ -145,25 +145,16 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
   if (response?.models) {
     const allowedModels = response.models.filter((modelId: string) => {
       const id = modelId.toLowerCase();
-      // Completely exclude all Gemma-3 family and model variants
-      if (id.includes("gemma-3") || id.includes("gemma3") || id.includes("gemma_3")) return false;
-
-      return (
-        id.includes("qwen") ||
-        id.includes("gemma-2") ||
-        id.includes("gemma2") ||
-        id.includes("llama") ||
-        id.includes("phi") ||
-        modelId === "Qwen3.5-0.8B-q4f16_1-MLC" ||
-        modelId === "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
-      );
+      // Only allow Qwen family models
+      return id.includes("qwen");
     });
 
-    // Pin Qwen2.5-1.5B explicitly for Vietnamese/multilingual support if available
+    // Pin Qwen2.5-1.5B and 3B explicitly for Vietnamese/multilingual support
     const preferred = [
       "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
       "Qwen2.5-1.5B-Instruct-q4f32_1-MLC",
-      "Qwen2.5-1.5B-Instruct-q0f16-MLC",
+      "Qwen2.5-3B-Instruct-q4f16_1-MLC",
+      "Qwen2.5-3B-Instruct-q4f32_1-MLC",
     ];
     const extraModels = preferred.filter(
       (m) => !allowedModels.includes(m)
