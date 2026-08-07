@@ -316,7 +316,7 @@ chrome.runtime.onConnect.addListener((port) => {
       const { descriptionText, acceptanceCriteriaText, commentsText, targetLanguage } = msg;
       const language = targetLanguage || "English";
       const langInstruction = language !== "English"
-        ? ` Respond entirely in ${language}.`
+        ? `\n\nIMPORTANT: Your entire response MUST be written in ${language}. Do not use English at all.`
         : "";
 
       try {
@@ -326,7 +326,8 @@ chrome.runtime.onConnect.addListener((port) => {
         const prompt = template
           .replace("{description}", descriptionText || "(No description provided)")
           .replace("{acceptance_criteria}", acceptanceCriteriaText || "(No acceptance criteria provided)")
-          .replace("{comments}", commentsText || "(No discussion comments)");
+          .replace("{comments}", commentsText || "(No discussion comments)")
+          + langInstruction;
 
         if (config.provider === "openaiCompatible") {
           await handleOpenAIRequest(prompt, config, (res) => {
@@ -338,7 +339,7 @@ chrome.runtime.onConnect.addListener((port) => {
             {
               role: "system",
               content:
-                `You are an Agile Business Analyst. Synthesize the Work Item details into Markdown with headings '### Executive Summary', '### Key Requirements & Scope', '### Investigation & Discussion Insights', '### Proposed / Implemented Solution', and '### Acceptance Criteria Summary'. Output ONLY the summary content. Do NOT echo system prompts or instructions.${langInstruction}`,
+                `You are a concise technical assistant. Summarize the Work Item in max 5 short bullet points using Markdown. Be brief. Output ONLY the summary, no extra commentary.`,
             },
             { role: "user", content: prompt },
           ];

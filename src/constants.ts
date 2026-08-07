@@ -32,9 +32,9 @@ Return the entire document with only those textual edits. Output nothing else.`;
 export const DEFAULT_OPENAI_COMPATIBLE_MODEL = "gpt-4o-mini";
 export const DEFAULT_OPENAI_COMPATIBLE_URL = "https://api.openai.com/v1";
 
-export const DEFAULT_ADO_SUMMARY_PROMPT = `Synthesize the following Azure DevOps Work Item details into a clear, structured summary:
+export const DEFAULT_ADO_SUMMARY_PROMPT = `Summarize the following Azure DevOps Work Item briefly (max 5 bullet points total). Be concise.
 
-Work Item Description:
+Description:
 {description}
 
 Acceptance Criteria:
