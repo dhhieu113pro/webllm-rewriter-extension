@@ -320,19 +320,32 @@ chrome.runtime.onConnect.addListener((port) => {
       const headerSolution = isVietnamese ? "Giải pháp" : "Solution";
       const langName = isVietnamese ? "Vietnamese (Tiếng Việt)" : "English";
 
-      const langInstruction = isVietnamese
-        ? `\n\nIMPORTANT: Your entire response MUST be written in ${langName}. Do not use English at all. Translate everything to Vietnamese.`
-        : "";
-
       try {
         const config = await getConfig();
-        const template = config.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
+        let prompt = "";
 
-        const prompt = template
-          .replace("{description}", descriptionText || "(No description provided)")
-          .replace("{acceptance_criteria}", acceptanceCriteriaText || "(No acceptance criteria provided)")
-          .replace("{comments}", commentsText || "(No discussion comments)")
-          + langInstruction;
+        if (isVietnamese) {
+          prompt = `Tóm tắt chi tiết Work Item Azure DevOps sau đây bằng Tiếng Việt:
+
+### Tóm tắt
+(1-2 câu: tóm tắt nội dung ticket bằng Tiếng Việt)
+
+### Giải pháp
+(1-2 câu: giải pháp bằng Tiếng Việt)
+
+Work Item:
+Mô tả: ${descriptionText || "(Không có mô tả)"}
+Tiêu chí nghiệm thu: ${acceptanceCriteriaText || "(Không có tiêu chí nghiệm thu)"}
+Thảo luận & Bình luận: ${commentsText || "(Không có bình luận)"}
+
+LƯU Ý QUAN TRỌNG: Toàn bộ câu trả lời bắt buộc phải được viết bằng Tiếng Việt.`;
+        } else {
+          const template = config.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
+          prompt = template
+            .replace("{description}", descriptionText || "(No description provided)")
+            .replace("{acceptance_criteria}", acceptanceCriteriaText || "(No acceptance criteria provided)")
+            .replace("{comments}", commentsText || "(No discussion comments)");
+        }
 
         if (config.provider === "openaiCompatible") {
           await handleOpenAIRequest(prompt, config, (res) => {
@@ -340,11 +353,15 @@ chrome.runtime.onConnect.addListener((port) => {
           });
         } else {
           const llmEngine = await ensureEngine();
+          
+          const systemPrompt = isVietnamese
+            ? "Bạn là một trợ lý kỹ thuật ngắn gọn. Chỉ xuất ra chính xác 2 phần Markdown: '### Tóm tắt' (1-2 câu tóm tắt nội dung ticket) và '### Giải pháp' (1-2 câu về giải pháp). Không thêm bất kỳ phần nào khác. Không sử dụng gạch đầu dòng. Không viết tiếng Anh, chỉ viết tiếng Việt."
+            : `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### ${headerSummary}' (1-2 sentences about what the ticket is) and '### ${headerSolution}' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary. Respond entirely in ${langName}.`;
+
           const messages: ChatCompletionMessageParam[] = [
             {
               role: "system",
-              content:
-                `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### ${headerSummary}' (1-2 sentences about what the ticket is) and '### ${headerSolution}' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary. Respond entirely in ${langName}.`,
+              content: systemPrompt,
             },
             { role: "user", content: prompt },
           ];
