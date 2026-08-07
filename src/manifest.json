@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WebLLM Rewriter",
-  "version": "0.2.0",
+  "version": "0.2.4",
   "description": "Proofread and rewrite text using local AI (WebLLM)",
   "icons": {
     "16": "icons/icon-16.png",

@@ -1,6 +1,6 @@
 {
   "name": "webllm-rewriter-extension",
-  "version": "0.2.0",
+  "version": "0.2.4",
   "description": "Chrome extension for text rewriting using local AI via WebLLM",
   "private": true,
   "scripts": {
