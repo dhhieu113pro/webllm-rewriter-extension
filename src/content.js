@@ -696,6 +696,18 @@ class AdoWorkItemSummarizer {
     this.isSummarizing = false;
     this.currentRequestId = 0;
     this.activePort = null;
+    this._targetLanguage = "English";
+    this._scrollAutoTriggered = false;
+    this._cleanupScrollTrigger = null;
+    // Load language preference
+    chrome.storage.sync.get(["adoTargetLanguage"], (res) => {
+      this._targetLanguage = res.adoTargetLanguage || "English";
+    });
+    chrome.storage.onChanged.addListener((changes) => {
+      if (changes.adoTargetLanguage) {
+        this._targetLanguage = changes.adoTargetLanguage.newValue || "English";
+      }
+    });
     this.initObserver();
   }
 
@@ -806,6 +818,12 @@ class AdoWorkItemSummarizer {
         this.cancelCurrentSummary();
         const existing = document.getElementById(this.inlineCardId);
         if (existing) existing.remove();
+        // Reset scroll auto-trigger for new work item
+        this._scrollAutoTriggered = false;
+        if (this._cleanupScrollTrigger) {
+          this._cleanupScrollTrigger();
+          this._cleanupScrollTrigger = null;
+        }
       }
 
       if (workItemId) {
@@ -825,39 +843,31 @@ class AdoWorkItemSummarizer {
   }
 
   findSummaryInsertionElement() {
-    // Find Discussion section by label text
-    const allLabels = Array.from(document.querySelectorAll(
-      "label, .work-item-control-label, .ms-Label, [class*='label'], [class*='Label'], h2, h3, span"
-    ));
+    // Find the main left content column — the direct parent of all work item sections
+    const mainColumn = document.querySelector(
+      ".work-item-form-main-column, .work-item-left-pane, .work-item-form-content, .work-item-form-body"
+    );
 
-    for (const label of allLabels) {
-      if (/^discussion$/i.test((label.innerText || label.textContent || "").trim())) {
-        const wrapper =
-          label.closest(".work-item-control") ||
-          label.closest(".work-item-form-control") ||
-          label.closest(".work-item-form-group") ||
-          label.closest(".work-item-form-section") ||
-          label.parentElement?.parentElement ||
-          label.parentElement;
-        if (wrapper) return wrapper;
-      }
+    if (mainColumn) {
+      // Return the last direct child so insertBefore(nextSibling) places card at the very bottom
+      const children = Array.from(mainColumn.children).filter(
+        (c) => c.id !== this.inlineCardId
+      );
+      return children[children.length - 1] || mainColumn;
     }
 
-    // Fallback: aria-label / class selectors for Discussion
-    const discussionSelectors = [
-      '[aria-label="Discussion"]',
-      '[aria-label*="Discussion"]',
-      '.work-item-form-discussion',
-      '.workitem-control-discussion',
-    ];
-    for (const sel of discussionSelectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        return el.closest(".work-item-control") ||
-               el.closest(".work-item-form-control") ||
-               el.closest(".work-item-form-group") ||
-               el.closest(".work-item-form-section") ||
-               el.parentElement || el;
+    // Fallback: find Discussion by label and walk to its topmost section sibling
+    const allLabels = Array.from(document.querySelectorAll("label, .work-item-control-label, .ms-Label, h2, h3, span"));
+    for (const label of allLabels) {
+      if (/^discussion$/i.test((label.innerText || label.textContent || "").trim())) {
+        // Walk up until we find a node whose parent has multiple section siblings
+        let node = label;
+        while (node && node.parentElement && node.parentElement !== document.body) {
+          const siblings = node.parentElement.children.length;
+          if (siblings >= 3) return node; // found a section-level container
+          node = node.parentElement;
+        }
+        return node || label;
       }
     }
 
@@ -950,6 +960,8 @@ class AdoWorkItemSummarizer {
           if (inlineBody) {
             inlineBody.innerHTML = `<span style="color: ${theme.mutedText}; font-style: italic;">Click "Generate" to summarize this Work Item.</span>`;
           }
+          this.showDiscussionWarningIfCollapsed(theme);
+          this.setupScrollAutoTrigger();
         }
       });
     } else {
@@ -957,6 +969,77 @@ class AdoWorkItemSummarizer {
       if (inlineBody) {
         inlineBody.innerHTML = `<span style="color: ${theme.mutedText}; font-style: italic;">Click "Generate" to summarize this Work Item.</span>`;
       }
+      this.showDiscussionWarningIfCollapsed(theme);
+      this.setupScrollAutoTrigger();
+    }
+  }
+
+  setupScrollAutoTrigger() {
+    if (this._scrollAutoTriggered) return;
+
+    const onScroll = () => {
+      const scrollEl = document.scrollingElement || document.documentElement;
+      const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 100;
+      if (atBottom) {
+        document.removeEventListener("scroll", onScroll);
+        if (this._scrollAutoTriggered) return;
+        this._scrollAutoTriggered = true;
+        // Small delay to let comments render
+        setTimeout(() => {
+          const genBtn = document.getElementById("webllm-inline-generate-btn");
+          if (genBtn) genBtn.click();
+        }, 1000);
+      }
+    };
+
+    document.addEventListener("scroll", onScroll, { passive: true });
+
+    // Clean up if the work item changes
+    this._cleanupScrollTrigger = () => {
+      document.removeEventListener("scroll", onScroll);
+    };
+  }
+
+  showDiscussionWarningIfCollapsed(theme) {
+    // Check if Discussion has visible comment content
+    const commentSelectors = [
+      '.work-item-comment-item-text',
+      '.comment-item-content',
+      '.comments-item-content',
+      '.work-item-comment',
+      '.discussion-messages',
+    ];
+    const hasVisibleComments = commentSelectors.some((sel) => {
+      const el = document.querySelector(sel);
+      return el && el.offsetHeight > 0;
+    });
+
+    // Also check raw text length of the discussion container
+    const discussionEl = document.querySelector(
+      '[aria-label*="Discussion"], .work-item-form-discussion, .workitem-control-discussion'
+    );
+    const discussionTextLen = discussionEl ? (discussionEl.innerText || "").trim().length : 0;
+    const isExpanded = hasVisibleComments || discussionTextLen > 80;
+
+    if (!isExpanded) {
+      if (document.getElementById("webllm-discussion-warning")) return;
+      const box = document.getElementById(this.inlineCardId);
+      if (!box) return;
+      const banner = document.createElement("div");
+      banner.id = "webllm-discussion-warning";
+      banner.style.cssText = [
+        "display:flex", "align-items:center", "gap:8px",
+        "padding:8px 16px",
+        "background:rgba(251,191,36,0.12)",
+        "border-bottom:1px solid rgba(251,191,36,0.3)",
+        "font-size:12px", "color:#f59e0b",
+      ].join(";");
+      banner.innerHTML = `
+        <span style="font-size:15px;">⚠️</span>
+        <span>Discussion is collapsed — expand it first so comments are included in the summary.</span>
+      `;
+      const inlineBody = document.getElementById("webllm-inline-body");
+      if (inlineBody) box.insertBefore(banner, inlineBody);
     }
   }
 
@@ -1349,6 +1432,7 @@ class AdoWorkItemSummarizer {
         descriptionText: data.descriptionText,
         acceptanceCriteriaText: data.acceptanceCriteriaText,
         commentsText: data.commentsText,
+        targetLanguage: this._targetLanguage || "English",
       });
     } catch (err) {
       if (requestId !== this.currentRequestId) return;

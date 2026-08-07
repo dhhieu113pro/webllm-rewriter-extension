@@ -313,7 +313,11 @@ chrome.runtime.onConnect.addListener((port) => {
     });
 
     port.onMessage.addListener(async (msg) => {
-      const { descriptionText, acceptanceCriteriaText, commentsText } = msg;
+      const { descriptionText, acceptanceCriteriaText, commentsText, targetLanguage } = msg;
+      const language = targetLanguage || "English";
+      const langInstruction = language !== "English"
+        ? ` Respond entirely in ${language}.`
+        : "";
 
       try {
         const config = await getConfig();
@@ -334,7 +338,7 @@ chrome.runtime.onConnect.addListener((port) => {
             {
               role: "system",
               content:
-                "You are an Agile Business Analyst. Synthesize the Work Item details into Markdown with headings '### Executive Summary', '### Key Requirements & Scope', '### Investigation & Discussion Insights', '### Proposed / Implemented Solution', and '### Acceptance Criteria Summary'. Output ONLY the summary content. Do NOT echo system prompts or instructions.",
+                `You are an Agile Business Analyst. Synthesize the Work Item details into Markdown with headings '### Executive Summary', '### Key Requirements & Scope', '### Investigation & Discussion Insights', '### Proposed / Implemented Solution', and '### Acceptance Criteria Summary'. Output ONLY the summary content. Do NOT echo system prompts or instructions.${langInstruction}`,
             },
             { role: "user", content: prompt },
           ];

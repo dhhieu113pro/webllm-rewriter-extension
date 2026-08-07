@@ -38,6 +38,7 @@ const copyToClipboardEl = document.getElementById("copy-to-clipboard") as HTMLIn
 // Work Item Summary Elements
 const adoAutoSummaryToggle = document.getElementById("ado-auto-summary") as HTMLInputElement;
 const adoAutoDelayInput = document.getElementById("ado-auto-delay") as HTMLInputElement;
+const adoTargetLanguageSelect = document.getElementById("ado-target-language") as HTMLSelectElement;
 const adoSummaryPromptEl = document.getElementById("ado-summary-prompt") as HTMLTextAreaElement;
 const resetAdoPromptBtn = document.getElementById("reset-ado-prompt-btn") as HTMLButtonElement;
 const clearAdoCacheBtn = document.getElementById("clear-ado-cache-btn") as HTMLButtonElement;
@@ -196,6 +197,7 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
     // Work Item Summary settings
     adoAutoSummaryToggle.checked = result.adoAutoSummary !== false;
     adoAutoDelayInput.value = String(typeof result.adoAutoDelay === "number" ? result.adoAutoDelay : 1000);
+    adoTargetLanguageSelect.value = result.adoTargetLanguage || "English";
     adoSummaryPromptEl.value = result.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
 
     const localKeys = await chrome.storage.local.get(["openaiCompatibleKey"]);
@@ -329,6 +331,7 @@ saveBtn.addEventListener("click", async () => {
     copyToClipboard: copyToClipboardEl.checked,
     adoAutoSummary: adoAutoSummaryToggle.checked,
     adoAutoDelay: parseInt(adoAutoDelayInput.value, 10) || 1000,
+    adoTargetLanguage: adoTargetLanguageSelect.value,
     adoSummaryPrompt: adoSummaryPromptEl.value,
   };
 
