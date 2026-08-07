@@ -799,7 +799,9 @@ class AdoWorkItemSummarizer {
   getWorkItemId() {
     const match = window.location.href.match(/_workitems\/edit\/(\d+)/i) ||
                   window.location.href.match(/workitems\/edit\/(\d+)/i) ||
-                  window.location.href.match(/_workitems\/(\d+)/i);
+                  window.location.href.match(/_workitems\/(\d+)/i) ||
+                  window.location.href.match(/workitem=(\d+)/i) ||
+                  window.location.href.match(/workitem\/(\d+)/i);
     if (match && match[1]) return match[1];
 
     const idEl = document.querySelector(".work-item-form-id span, [aria-label='ID'], .work-item-form-id");
@@ -848,8 +850,10 @@ class AdoWorkItemSummarizer {
   }
 
   findSummaryInsertionElement() {
+    const activeForm = this.getActiveWorkItemForm() || document.body;
+
     // Find the main left content column — the direct parent of all work item sections
-    const mainColumn = document.querySelector(
+    const mainColumn = activeForm.querySelector(
       ".work-item-form-main-column, .work-item-left-pane, .work-item-form-content, .work-item-form-body"
     );
 
@@ -862,7 +866,7 @@ class AdoWorkItemSummarizer {
     }
 
     // Fallback: find Discussion by label and walk to its topmost section sibling
-    const allLabels = Array.from(document.querySelectorAll("label, .work-item-control-label, .ms-Label, h2, h3, span"));
+    const allLabels = Array.from(activeForm.querySelectorAll("label, .work-item-control-label, .ms-Label, h2, h3, span"));
     for (const label of allLabels) {
       if (/^discussion$/i.test((label.innerText || label.textContent || "").trim())) {
         // Walk up until we find a node whose parent has multiple section siblings
