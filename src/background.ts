@@ -313,10 +313,14 @@ chrome.runtime.onConnect.addListener((port) => {
     });
 
     port.onMessage.addListener(async (msg) => {
-      const { descriptionText, acceptanceCriteriaText, commentsText, targetLanguage } = msg;
       const language = targetLanguage || "English";
-      const langInstruction = language !== "English"
-        ? `\n\nIMPORTANT: Your entire response MUST be written in ${language}. Do not use English at all.`
+      const isVietnamese = language === "Vietnamese";
+      const headerSummary = isVietnamese ? "Tóm tắt" : "Summary";
+      const headerSolution = isVietnamese ? "Giải pháp" : "Solution";
+      const langName = isVietnamese ? "Vietnamese (Tiếng Việt)" : "English";
+
+      const langInstruction = isVietnamese
+        ? `\n\nIMPORTANT: Your entire response MUST be written in ${langName}. Do not use English at all. Translate everything to Vietnamese.`
         : "";
 
       try {
@@ -339,7 +343,7 @@ chrome.runtime.onConnect.addListener((port) => {
             {
               role: "system",
               content:
-                `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### Summary' (1-2 sentences about what the ticket is) and '### Solution' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary.`,
+                `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### ${headerSummary}' (1-2 sentences about what the ticket is) and '### ${headerSolution}' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary. Respond entirely in ${langName}.`,
             },
             { role: "user", content: prompt },
           ];
