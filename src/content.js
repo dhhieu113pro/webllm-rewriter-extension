@@ -98,13 +98,14 @@ class InputHookIndicatorManager {
 
   bindPositionUpdaters() {
     const update = () => {
+      if (this.indicators.size === 0) return;
       if (this.animationFrame !== null) return;
       this.animationFrame = requestAnimationFrame(() => {
         this.animationFrame = null;
         this.updateAllPositions();
       });
     };
-    window.addEventListener("scroll", update, true);
+    window.addEventListener("scroll", update, false);
     window.addEventListener("resize", update);
   }
 
@@ -686,4 +687,688 @@ class InputHandler {
 }
 
 new InputHandler();
+
+class AdoWorkItemSummarizer {
+  constructor() {
+    this.inlineCardId = "webllm-ado-inline-summary-box";
+    this.currentWorkItemId = null;
+    this.autoRunTimer = null;
+    this.isSummarizing = false;
+    this.currentRequestId = 0;
+    this.activePort = null;
+    this.initObserver();
+  }
+
+  isAdoPage() {
+    const host = window.location.hostname;
+    return (
+      host.includes("dev.azure.com") ||
+      host.includes("visualstudio.com") ||
+      host.includes("azure.com") ||
+      document.querySelector(".work-item-form, .work-item-dialog, .work-item-view, .work-item-form-main-column") !== null
+    );
+  }
+
+  isAdoDarkMode() {
+    if (
+      document.body.classList.contains("dark-theme") ||
+      document.body.classList.contains("dark") ||
+      document.documentElement.getAttribute("data-theme") === "dark" ||
+      document.querySelector(".ms-Fabric--isFocusHidden.dark-theme") ||
+      document.querySelector(".vss-Theme-dark")
+    ) {
+      return true;
+    }
+    const bg = window.getComputedStyle(document.body).backgroundColor;
+    if (bg) {
+      const rgb = bg.match(/\d+/g);
+      if (rgb && rgb.length >= 3) {
+        const brightness = (parseInt(rgb[0]) * 299 + parseInt(rgb[1]) * 587 + parseInt(rgb[2]) * 114) / 1000;
+        return brightness < 128;
+      }
+    }
+    return false;
+  }
+
+  getThemeStyles() {
+    const isDark = this.isAdoDarkMode();
+    if (isDark) {
+      return {
+        background: "linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))",
+        border: "1px solid rgba(56, 189, 248, 0.35)",
+        headerBg: "rgba(56, 189, 248, 0.1)",
+        headerBorder: "rgba(56, 189, 248, 0.2)",
+        headerText: "#38bdf8",
+        bodyText: "#e2e8f0",
+        mutedText: "#94a3b8",
+        shadow: "0 8px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
+        btnGenBg: "#2563eb",
+        btnGenText: "#ffffff",
+        btnCancelBg: "rgba(239, 68, 68, 0.15)",
+        btnCancelText: "#f87171",
+        btnCancelBorder: "1px solid rgba(239, 68, 68, 0.3)",
+        btnCopyBg: "rgba(255,255,255,0.1)",
+        btnCopyBorder: "rgba(255,255,255,0.2)",
+        btnCopyText: "#e2e8f0",
+        scrollbar: "#475569 transparent",
+        spinnerColor: "#38bdf8",
+        spinnerBg: "rgba(56, 189, 248, 0.25)",
+      };
+    } else {
+      return {
+        background: "linear-gradient(180deg, #ffffff, #f8fafc)",
+        border: "1px solid #0078d4",
+        headerBg: "#eff6fc",
+        headerBorder: "#c7e0f4",
+        headerText: "#005a9e",
+        bodyText: "#201f1e",
+        mutedText: "#605e5c",
+        shadow: "0 4px 14px rgba(0,0,0,0.08)",
+        btnGenBg: "#0078d4",
+        btnGenText: "#ffffff",
+        btnCancelBg: "#fef2f2",
+        btnCancelText: "#dc2626",
+        btnCancelBorder: "1px solid #fca5a5",
+        btnCopyBg: "#f3f2f1",
+        btnCopyBorder: "#e1dfdd",
+        btnCopyText: "#323130",
+        scrollbar: "#c8c6c4 transparent",
+        spinnerColor: "#0078d4",
+        spinnerBg: "rgba(0, 120, 212, 0.2)",
+      };
+    }
+  }
+
+  getWorkItemId() {
+    const match = window.location.href.match(/_workitems\/edit\/(\d+)/i) ||
+                  window.location.href.match(/workitems\/edit\/(\d+)/i) ||
+                  window.location.href.match(/_workitems\/(\d+)/i);
+    if (match && match[1]) return match[1];
+
+    const idEl = document.querySelector(".work-item-form-id span, [aria-label='ID'], .work-item-form-id");
+    if (idEl && idEl.innerText) {
+      const numMatch = idEl.innerText.match(/\d+/);
+      if (numMatch) return numMatch[0];
+    }
+    return null;
+  }
+
+  initObserver() {
+    const checkAndInject = () => {
+      if (!this.isAdoPage()) return;
+
+      const workItemId = this.getWorkItemId();
+      const hasForm = document.querySelector(".work-item-form, .work-item-dialog, .work-item-view, .work-item-form-main-column") !== null;
+      if (!workItemId && !hasForm) return;
+
+      // Only cancel/reset summary if switching from one valid work item ID to a different work item ID
+      if (workItemId && this.currentWorkItemId && workItemId !== this.currentWorkItemId) {
+        this.cancelCurrentSummary();
+        const existing = document.getElementById(this.inlineCardId);
+        if (existing) existing.remove();
+      }
+
+      if (workItemId) {
+        this.currentWorkItemId = workItemId;
+      }
+
+      this.injectInlineBox();
+    };
+
+    checkAndInject();
+
+    // Lightweight 1-second interval + navigation events to prevent CPU spikes
+    setInterval(checkAndInject, 1000);
+    window.addEventListener("popstate", checkAndInject);
+    window.addEventListener("hashchange", checkAndInject);
+    document.addEventListener("click", () => setTimeout(checkAndInject, 400));
+  }
+
+  findSummaryInsertionElement() {
+    // Find Discussion section by label text
+    const allLabels = Array.from(document.querySelectorAll(
+      "label, .work-item-control-label, .ms-Label, [class*='label'], [class*='Label'], h2, h3, span"
+    ));
+
+    for (const label of allLabels) {
+      if (/^discussion$/i.test((label.innerText || label.textContent || "").trim())) {
+        const wrapper =
+          label.closest(".work-item-control") ||
+          label.closest(".work-item-form-control") ||
+          label.closest(".work-item-form-group") ||
+          label.closest(".work-item-form-section") ||
+          label.parentElement?.parentElement ||
+          label.parentElement;
+        if (wrapper) return wrapper;
+      }
+    }
+
+    // Fallback: aria-label / class selectors for Discussion
+    const discussionSelectors = [
+      '[aria-label="Discussion"]',
+      '[aria-label*="Discussion"]',
+      '.work-item-form-discussion',
+      '.workitem-control-discussion',
+    ];
+    for (const sel of discussionSelectors) {
+      const el = document.querySelector(sel);
+      if (el) {
+        return el.closest(".work-item-control") ||
+               el.closest(".work-item-form-control") ||
+               el.closest(".work-item-form-group") ||
+               el.closest(".work-item-form-section") ||
+               el.parentElement || el;
+      }
+    }
+
+    return null;
+  }
+
+  injectInlineBox() {
+    const existing = document.getElementById(this.inlineCardId);
+
+    // If card already exists in the document DOM, keep it and return immediately
+    if (existing && document.body.contains(existing)) {
+      return;
+    }
+    if (existing) {
+      existing.remove();
+    }
+
+    const anchorEl = this.findSummaryInsertionElement();
+    if (!anchorEl) return;
+
+    const theme = this.getThemeStyles();
+    const box = document.createElement("div");
+    box.id = this.inlineCardId;
+    Object.assign(box.style, {
+      marginTop: "16px",
+      marginBottom: "20px",
+      borderRadius: "12px",
+      border: theme.border,
+      background: theme.background,
+      boxShadow: theme.shadow,
+      color: theme.bodyText,
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      overflow: "hidden",
+      clear: "both",
+      transition: "all 0.3s ease",
+    });
+
+    box.innerHTML = `
+      <div style="padding: 12px 16px; background: ${theme.headerBg}; border-bottom: 1px solid ${theme.headerBorder}; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: ${theme.headerText};">
+          <span>✨</span> Work Item Summary
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button id="webllm-inline-generate-btn" type="button" style="background: ${theme.btnGenBg}; color: ${theme.btnGenText}; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">✨ Generate</button>
+          <button id="webllm-inline-cancel-btn" type="button" title="Cancel summary" style="background: ${theme.btnCancelBg}; color: ${theme.btnCancelText}; border: ${theme.btnCancelBorder}; width: 26px; height: 26px; border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; cursor: pointer; padding: 0;">✕</button>
+          <button id="webllm-inline-copy-btn" type="button" style="background: ${theme.btnCopyBg}; color: ${theme.btnCopyText}; border: 1px solid ${theme.btnCopyBorder}; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; display: none;">📋 Copy</button>
+          <button id="webllm-inline-clear-btn" type="button" title="Clear saved summary" style="background: ${theme.btnCopyBg}; color: ${theme.btnCopyText}; border: 1px solid ${theme.btnCopyBorder}; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; display: none;">🗑️</button>
+        </div>
+      </div>
+      <div id="webllm-inline-body" style="padding: 16px; max-height: 260px; overflow-y: auto; font-size: 13.5px; line-height: 1.6; color: ${theme.bodyText}; scrollbar-width: thin; scrollbar-color: ${theme.scrollbar};">
+        <span style="color: ${theme.mutedText}; font-style: italic;">Loading ticket details...</span>
+      </div>
+    `;
+
+    if (anchorEl === document.body || !anchorEl.parentNode) {
+      anchorEl.appendChild(box);
+    } else if (anchorEl.nextSibling) {
+      anchorEl.parentNode.insertBefore(box, anchorEl.nextSibling);
+    } else {
+      anchorEl.parentNode.appendChild(box);
+    }
+
+    const genBtn = document.getElementById("webllm-inline-generate-btn");
+    const cancelBtn = document.getElementById("webllm-inline-cancel-btn");
+    const clearBtn = document.getElementById("webllm-inline-clear-btn");
+
+    if (genBtn) {
+      genBtn.addEventListener("click", () => this.handleInlineSummarize(false));
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", () => this.cancelCurrentSummary());
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => this.clearSavedSummary());
+    }
+
+    // Check if summary is saved for this ticket ID, otherwise wait for manual click
+    const workItemId = this.currentWorkItemId || this.getWorkItemId();
+    const storageKey = workItemId ? `ado_summary_${workItemId}` : null;
+
+    if (storageKey) {
+      chrome.storage.local.get([storageKey], (res) => {
+        const savedSummary = res[storageKey];
+        if (savedSummary) {
+          this.renderSummaryText(savedSummary, theme);
+        } else {
+          const inlineBody = document.getElementById("webllm-inline-body");
+          if (inlineBody) {
+            inlineBody.innerHTML = `<span style="color: ${theme.mutedText}; font-style: italic;">Click "Generate" to summarize this Work Item.</span>`;
+          }
+        }
+      });
+    } else {
+      const inlineBody = document.getElementById("webllm-inline-body");
+      if (inlineBody) {
+        inlineBody.innerHTML = `<span style="color: ${theme.mutedText}; font-style: italic;">Click "Generate" to summarize this Work Item.</span>`;
+      }
+    }
+  }
+
+  renderMarkdownToHtml(mdText) {
+    if (!mdText) return "";
+    const lines = mdText.split(/\r?\n/);
+    const htmlLines = [];
+    let inList = false;
+    let listType = ""; // "ul" or "ol"
+
+    for (let line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (inList) {
+          htmlLines.push(listType === "ol" ? "</ol>" : "</ul>");
+          inList = false;
+        }
+        htmlLines.push("<div style='height: 8px;'></div>");
+        continue;
+      }
+
+      // Escape HTML
+      let lineHtml = trimmed
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // Inline formatting
+      lineHtml = lineHtml
+        .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong style="color: inherit; font-weight: 700;">$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background: rgba(128,128,128,0.18); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px;">$1</code>');
+
+      // Headings (H1 - H6)
+      const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+      if (headingMatch) {
+        if (inList) {
+          htmlLines.push(listType === "ol" ? "</ol>" : "</ul>");
+          inList = false;
+        }
+        const level = headingMatch[1].length;
+        const text = lineHtml.replace(/^#{1,6}\s+/, "");
+        const fontSizes = { 1: "16px", 2: "15px", 3: "14px", 4: "13.5px", 5: "13px", 6: "12.5px" };
+        const margins = { 1: "14px 0 6px 0", 2: "12px 0 6px 0", 3: "10px 0 4px 0", 4: "8px 0 4px 0", 5: "6px 0 2px 0", 6: "6px 0 2px 0" };
+        const border = level <= 2 ? "border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 3px;" : "";
+        htmlLines.push(`<h${level} style="margin: ${margins[level]}; font-size: ${fontSizes[level]}; font-weight: 700; color: inherit; ${border}">${text}</h${level}>`);
+        continue;
+      }
+
+      // Unordered Lists (- or * or +)
+      const ulMatch = trimmed.match(/^[-*+]\s+(.*)$/);
+      if (ulMatch) {
+        if (!inList || listType !== "ul") {
+          if (inList) htmlLines.push(listType === "ol" ? "</ol>" : "</ul>");
+          htmlLines.push('<ul style="margin: 4px 0; padding-left: 20px;">');
+          inList = true;
+          listType = "ul";
+        }
+        htmlLines.push(`<li style="margin-bottom: 4px; line-height: 1.5;">${lineHtml.replace(/^[-*+]\s+/, "")}</li>`);
+        continue;
+      }
+
+      // Ordered Lists (1. or 2.)
+      const olMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+      if (olMatch) {
+        if (!inList || listType !== "ol") {
+          if (inList) htmlLines.push(listType === "ol" ? "</ol>" : "</ul>");
+          htmlLines.push('<ol style="margin: 4px 0; padding-left: 20px;">');
+          inList = true;
+          listType = "ol";
+        }
+        htmlLines.push(`<li style="margin-bottom: 4px; line-height: 1.5;">${lineHtml.replace(/^\d+\.\s+/, "")}</li>`);
+        continue;
+      }
+
+      // Normal text line
+      if (inList) {
+        htmlLines.push(listType === "ol" ? "</ol>" : "</ul>");
+        inList = false;
+      }
+      htmlLines.push(`<div style="margin-bottom: 4px; line-height: 1.5;">${lineHtml}</div>`);
+    }
+
+    if (inList) {
+      htmlLines.push(listType === "ol" ? "</ol>" : "</ul>");
+    }
+    return htmlLines.join("");
+  }
+
+  setRunningState(isRunning) {
+    this.isSummarizing = isRunning;
+    const genBtn = document.getElementById("webllm-inline-generate-btn");
+    const cancelBtn = document.getElementById("webllm-inline-cancel-btn");
+    const copyBtn = document.getElementById("webllm-inline-copy-btn");
+    const clearBtn = document.getElementById("webllm-inline-clear-btn");
+
+    if (isRunning) {
+      if (genBtn) genBtn.style.display = "none";
+      if (copyBtn) copyBtn.style.display = "none";
+      if (clearBtn) clearBtn.style.display = "none";
+      if (cancelBtn) cancelBtn.style.display = "inline-flex";
+    } else {
+      if (genBtn) genBtn.style.display = "inline-block";
+      if (cancelBtn) cancelBtn.style.display = "none";
+    }
+  }
+
+  clearSavedSummary() {
+    const workItemId = this.currentWorkItemId || this.getWorkItemId();
+    if (workItemId) {
+      chrome.storage.local.remove([`ado_summary_${workItemId}`]);
+    }
+
+    const inlineBody = document.getElementById("webllm-inline-body");
+    const copyBtn = document.getElementById("webllm-inline-copy-btn");
+    const clearBtn = document.getElementById("webllm-inline-clear-btn");
+    const genBtn = document.getElementById("webllm-inline-generate-btn");
+    const theme = this.getThemeStyles();
+
+    this.setRunningState(false);
+
+    if (genBtn) {
+      genBtn.textContent = "✨ Generate";
+      genBtn.style.background = theme.btnGenBg;
+      genBtn.style.color = theme.btnGenText;
+      genBtn.disabled = false;
+    }
+
+    if (copyBtn) copyBtn.style.display = "none";
+    if (clearBtn) clearBtn.style.display = "none";
+
+    if (inlineBody) {
+      inlineBody.innerHTML = `<span style="color: ${theme.mutedText}; font-style: italic;">Saved summary cleared. Click "Generate" to start.</span>`;
+    }
+  }
+
+  cancelCurrentSummary() {
+    clearTimeout(this.autoRunTimer);
+    if (this.activePort) {
+      try { this.activePort.disconnect(); } catch (e) {}
+      this.activePort = null;
+    }
+    this.currentRequestId++;
+    this.setRunningState(false);
+
+    const inlineBody = document.getElementById("webllm-inline-body");
+    const theme = this.getThemeStyles();
+
+    if (inlineBody) {
+      inlineBody.innerHTML = `<span style="color: ${theme.mutedText}; font-style: italic;">Generation cancelled. Click "Generate" to start.</span>`;
+    }
+  }
+
+  renderSummaryText(summaryText, theme = this.getThemeStyles()) {
+    const inlineBody = document.getElementById("webllm-inline-body");
+    const copyBtn = document.getElementById("webllm-inline-copy-btn");
+    const clearBtn = document.getElementById("webllm-inline-clear-btn");
+    const genBtn = document.getElementById("webllm-inline-generate-btn");
+
+    this.setRunningState(false);
+
+    if (genBtn) {
+      genBtn.textContent = "🔄 Regenerate";
+      genBtn.style.background = theme.btnGenBg;
+      genBtn.style.color = theme.btnGenText;
+      genBtn.disabled = false;
+    }
+
+    const renderedHtml = this.renderMarkdownToHtml(summaryText);
+
+    if (inlineBody) {
+      inlineBody.innerHTML = `<div style="font-size: 13.5px; color: ${theme.bodyText};">${renderedHtml}</div>`;
+      inlineBody.scrollTop = inlineBody.scrollHeight;
+    }
+
+    if (copyBtn) {
+      copyBtn.style.display = "inline-block";
+      copyBtn.onclick = () => {
+        // Copies the original raw unformatted markdown text byte-for-byte!
+        navigator.clipboard.writeText(summaryText);
+        copyBtn.textContent = "✓ Copied!";
+        setTimeout(() => { copyBtn.textContent = "📋 Copy"; }, 2000);
+      };
+    }
+
+    if (clearBtn) {
+      clearBtn.style.display = "inline-block";
+    }
+  }
+
+  getActiveWorkItemForm() {
+    // Find active visible modal/dialog or main form column
+    const containers = Array.from(document.querySelectorAll(".work-item-dialog, .work-item-form, .work-item-view, .work-item-form-main-column"));
+    for (const container of containers) {
+      if (container.offsetWidth > 0 && container.offsetHeight > 0 && window.getComputedStyle(container).display !== "none") {
+        return container;
+      }
+    }
+    // Fallback to closest parent container of the inline box
+    const inlineBox = document.getElementById(this.inlineCardId);
+    if (inlineBox) {
+      const parentForm = inlineBox.closest(".work-item-form, .work-item-dialog, .work-item-view, .work-item-form-main-column");
+      if (parentForm) return parentForm;
+    }
+    return document.body;
+  }
+
+  extractWorkItemData() {
+    const activeForm = this.getActiveWorkItemForm();
+    let descriptionText = "";
+    let acceptanceCriteriaText = "";
+    let commentsText = "";
+
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      return el.offsetWidth > 0 && el.offsetHeight > 0 && style.display !== "none" && style.visibility !== "hidden";
+    };
+
+    const getTextFromElement = (el) => {
+      if (!el) return "";
+      let text = (el.innerText || el.textContent || "").trim();
+
+      // Check inner iframe if rich editor is framed in Azure DevOps
+      const iframes = el.querySelectorAll("iframe");
+      iframes.forEach((iframe) => {
+        try {
+          const iframeText = (iframe.contentWindow?.document?.body?.innerText || "").trim();
+          if (iframeText) text += "\n" + iframeText;
+        } catch (e) {}
+      });
+
+      return text.trim();
+    };
+
+    // Description selectors in active form
+    const descSelectors = [
+      '[aria-label*="Description"]',
+      '.work-item-description',
+      '[data-vss-mention-target*="Description"]',
+      '.workitem-control-description',
+      '.work-item-form-description',
+    ];
+    const descEls = Array.from(activeForm.querySelectorAll(descSelectors.join(", "))).filter(isVisible);
+    descEls.forEach((el) => {
+      const text = getTextFromElement(el);
+      if (text) descriptionText += text + "\n";
+    });
+
+    // Acceptance criteria selectors in active form
+    const acSelectors = [
+      '[aria-label*="Acceptance Criteria"]',
+      '.workitem-control-acceptance-criteria',
+      '[data-vss-mention-target*="Acceptance"]',
+    ];
+    const acEls = Array.from(activeForm.querySelectorAll(acSelectors.join(", "))).filter(isVisible);
+    acEls.forEach((el) => {
+      const text = getTextFromElement(el);
+      if (text) acceptanceCriteriaText += text + "\n";
+    });
+
+    // Discussion / Comments elements in active form
+    const commentItemSelectors = [
+      '.work-item-comment-item-text',
+      '.comment-item-content',
+      '.comments-item-content',
+      '.activity-feed-comment-text',
+      '.comment-text',
+      '.comment-item',
+      '.work-item-comment',
+      '.discussion-messages .message-content',
+      '.comments-thread .comment-content',
+    ];
+
+    let commentEls = Array.from(activeForm.querySelectorAll(commentItemSelectors.join(", "))).filter(isVisible);
+
+    // Fallback if specific comment selectors returned nothing
+    if (commentEls.length === 0) {
+      const discussionContainer = activeForm.querySelector('[aria-label*="Discussion"], .workitem-control-discussion, [data-vss-mention-target*="Discussion"], .work-item-form-discussion');
+      if (discussionContainer) {
+        commentEls = Array.from(discussionContainer.querySelectorAll("p, div, span")).filter((el) => {
+          return isVisible(el) && el.children.length === 0 && (el.innerText || el.textContent || "").trim().length > 5;
+        });
+      }
+    }
+
+    const seenTexts = new Set();
+    commentEls.forEach((el) => {
+      const text = getTextFromElement(el);
+      if (
+        text &&
+        text.length > 3 &&
+        !/^discussion$/i.test(text) &&
+        !/^add a comment/i.test(text) &&
+        !/^save$/i.test(text) &&
+        !/^cancel$/i.test(text) &&
+        !seenTexts.has(text)
+      ) {
+        seenTexts.add(text);
+        commentsText += `- ${text}\n`;
+      }
+    });
+
+    // Ultimate Fallback search strictly within active form if specific selectors yielded nothing
+    if (!descriptionText.trim()) {
+      const rawText = (activeForm.innerText || activeForm.textContent || "").trim();
+      const lines = rawText.split(/\r?\n/).filter((l) => {
+        const line = l.trim();
+        return line.length > 10 && !line.includes("Work Item Summary") && !line.includes("✨ Generate");
+      });
+      descriptionText = lines.slice(0, 40).join("\n");
+    }
+
+    return { descriptionText, acceptanceCriteriaText, commentsText };
+  }
+
+  async handleInlineSummarize(isAutoRun = false) {
+    const inlineBody = document.getElementById("webllm-inline-body");
+    const theme = this.getThemeStyles();
+
+    const requestId = ++this.currentRequestId;
+    this.setRunningState(true);
+
+    if (this.activePort) {
+      try { this.activePort.disconnect(); } catch (e) {}
+      this.activePort = null;
+    }
+
+    const data = this.extractWorkItemData();
+
+    if (inlineBody) {
+      inlineBody.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px; color: ${theme.headerText};">
+          <svg style="width: 20px; height: 20px; animation: webllm-spin 0.8s linear infinite; will-change: transform;" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="${theme.spinnerBg}" stroke-width="3"></circle>
+            <path d="M12 2 a 10 10 0 0 1 10 10" stroke="${theme.spinnerColor}" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <span id="webllm-inline-status-text">${isAutoRun ? "Auto-generating summary..." : "Generating Work Item summary..."}</span>
+        </div>
+        <style>
+          @keyframes webllm-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      `;
+    }
+
+    let accumulatedSummary = "";
+
+    try {
+      this.activePort = chrome.runtime.connect({ name: "streamAdoSummary" });
+
+      this.activePort.onMessage.addListener((res) => {
+        if (requestId !== this.currentRequestId || !this.isSummarizing) {
+          if (this.activePort) {
+            try { this.activePort.disconnect(); } catch (e) {}
+            this.activePort = null;
+          }
+          return;
+        }
+
+        if (res.error) {
+          this.setRunningState(false);
+          if (inlineBody) {
+            inlineBody.innerHTML = `<span style="color: #f87171;">Error generating summary: ${res.message || "Unknown error"}</span>`;
+          }
+          return;
+        }
+
+        if (res.chunk) {
+          accumulatedSummary += res.chunk;
+          const html = this.renderMarkdownToHtml(accumulatedSummary);
+          if (inlineBody) {
+            inlineBody.innerHTML = `<div style="font-size: 13.5px; color: ${theme.bodyText};">${html}</div>`;
+            inlineBody.scrollTop = inlineBody.scrollHeight;
+          }
+        }
+
+        if (res.done) {
+          this.activePort = null;
+          this.renderSummaryText(accumulatedSummary, theme);
+
+          const workItemId = this.currentWorkItemId || this.getWorkItemId();
+          if (workItemId) {
+            chrome.storage.local.set({ [`ado_summary_${workItemId}`]: accumulatedSummary });
+          }
+        }
+      });
+
+      this.activePort.postMessage({
+        descriptionText: data.descriptionText,
+        acceptanceCriteriaText: data.acceptanceCriteriaText,
+        commentsText: data.commentsText,
+      });
+    } catch (err) {
+      if (requestId !== this.currentRequestId) return;
+      this.setRunningState(false);
+      if (inlineBody) {
+        inlineBody.innerHTML = `<span style="color: #f87171;">Error: ${err.message || String(err)}</span>`;
+      }
+    }
+  }
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === "loadProgress" && msg.text) {
+    const statusTextEl = document.getElementById("webllm-inline-status-text");
+    if (statusTextEl) {
+      const pct = Math.round((msg.progress || 0) * 100);
+      statusTextEl.textContent = `Initializing WebGPU model (${pct}%)...`;
+    }
+  }
+});
+
+new AdoWorkItemSummarizer();
 

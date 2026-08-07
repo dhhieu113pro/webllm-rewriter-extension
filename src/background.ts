@@ -10,6 +10,7 @@ import {
 
 import {
   DEFAULT_PROOFREAD_PROMPT,
+  DEFAULT_ADO_SUMMARY_PROMPT,
   PROVIDER_CONFIGS,
   DEFAULT_WEBLLM_MODEL,
   DEFAULT_OPENAI_COMPATIBLE_MODEL,
@@ -116,6 +117,22 @@ async function ensureEngine(modelId?: string): Promise<MLCEngineInterface> {
 
     engine = await CreateMLCEngine(targetModel, {
       initProgressCallback: progressCallback,
+      appConfig: {
+        model_list: [
+          {
+            model: `https://huggingface.co/mlc-ai/${targetModel}`,
+            model_id: targetModel,
+            model_lib: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models-v0_2_48/${targetModel}.wasm`,
+            overrides: {
+              sliding_window_size: -1,
+            },
+          },
+        ],
+      },
+    }).catch(async () => {
+      return await CreateMLCEngine(targetModel, {
+        initProgressCallback: progressCallback,
+      });
     });
     currentModel = targetModel;
     return engine;
@@ -271,7 +288,11 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   });
 
-  ensureEngine().catch((e) => console.warn("[WebLLM] Auto-load failed:", e.message));
+  ensureEngine().catch((e) => console.warn("[WebLLM] Auto-load on install failed:", e.message));
+});
+
+chrome.runtime.onStartup?.addListener(() => {
+  ensureEngine().catch((e) => console.warn("[WebLLM] Auto-load on startup failed:", e.message));
 });
 
 ensureEngine().catch((e) => console.warn("[WebLLM] Auto-load failed:", e.message));
@@ -282,8 +303,71 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
-// Handle streaming rewrite requests via long-lived port connections
+// Handle streaming requests via long-lived port connections
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === "streamAdoSummary") {
+    let aborted = false;
+
+    port.onDisconnect.addListener(() => {
+      aborted = true;
+    });
+
+    port.onMessage.addListener(async (msg) => {
+      const { descriptionText, acceptanceCriteriaText, commentsText } = msg;
+
+      try {
+        const config = await getConfig();
+        const template = config.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
+
+        const prompt = template
+          .replace("{description}", descriptionText || "(No description provided)")
+          .replace("{acceptance_criteria}", acceptanceCriteriaText || "(No acceptance criteria provided)")
+          .replace("{comments}", commentsText || "(No discussion comments)");
+
+        if (config.provider === "openaiCompatible") {
+          await handleOpenAIRequest(prompt, config, (res) => {
+            if (!aborted) port.postMessage(res);
+          });
+        } else {
+          const llmEngine = await ensureEngine();
+          const messages: ChatCompletionMessageParam[] = [
+            {
+              role: "system",
+              content:
+                "You are an Agile Business Analyst. Synthesize the Work Item details into Markdown with headings '### Executive Summary', '### Key Requirements & Scope', '### Investigation & Discussion Insights', '### Proposed / Implemented Solution', and '### Acceptance Criteria Summary'. Output ONLY the summary content. Do NOT echo system prompts or instructions.",
+            },
+            { role: "user", content: prompt },
+          ];
+
+          const completion = await llmEngine.chat.completions.create({
+            stream: true,
+            messages,
+          });
+
+          for await (const chunk of completion) {
+            if (aborted) break;
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+              port.postMessage({ chunk: content, done: false });
+            }
+          }
+
+          if (!aborted) {
+            port.postMessage({ done: true });
+          }
+        }
+      } catch (error: any) {
+        if (!aborted) {
+          port.postMessage({
+            error: true,
+            message: error.message || "Unknown error",
+          });
+        }
+      }
+    });
+    return;
+  }
+
   if (port.name !== "streamRewrite" && port.name !== "streamTypos") return;
 
   let aborted = false;

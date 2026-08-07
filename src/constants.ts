@@ -32,6 +32,17 @@ Return the entire document with only those textual edits. Output nothing else.`;
 export const DEFAULT_OPENAI_COMPATIBLE_MODEL = "gpt-4o-mini";
 export const DEFAULT_OPENAI_COMPATIBLE_URL = "https://api.openai.com/v1";
 
+export const DEFAULT_ADO_SUMMARY_PROMPT = `Synthesize the following Azure DevOps Work Item details into a clear, structured summary:
+
+Work Item Description:
+{description}
+
+Acceptance Criteria:
+{acceptance_criteria}
+
+Discussion & Comments:
+{comments}`;
+
 export const WEBLLM_MODELS: Record<string, { label: string; size: string }> = {
   "Qwen2.5-0.5B-Instruct-q4f16_1-MLC": { label: "Qwen2.5 0.5B (ultra-fast)", size: "~350MB" },
   "Qwen3.5-0.8B-q4f16_1-MLC": { label: "Qwen3.5 0.8B (fast)", size: "~550MB" },

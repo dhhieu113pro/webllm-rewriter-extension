@@ -6,9 +6,16 @@ import {
   DEFAULT_WEBLLM_MODEL,
   DEFAULT_OPENAI_COMPATIBLE_MODEL,
   DEFAULT_OPENAI_COMPATIBLE_URL,
+  DEFAULT_ADO_SUMMARY_PROMPT,
 } from "./constants";
 
 const MASKED_KEY = "********";
+
+// Tab Navigation Elements
+const tabBtnGeneral = document.getElementById("tab-btn-general") as HTMLButtonElement;
+const tabBtnWorkitem = document.getElementById("tab-btn-workitem") as HTMLButtonElement;
+const tabContentGeneral = document.getElementById("tab-content-general") as HTMLDivElement;
+const tabContentWorkitem = document.getElementById("tab-content-workitem") as HTMLDivElement;
 
 const providerSelect = document.getElementById("provider-select") as HTMLSelectElement;
 const webllmGroup = document.getElementById("webllm-group") as HTMLDivElement;
@@ -27,41 +34,50 @@ const resetModelBtn = document.getElementById("reset-model-btn") as HTMLButtonEl
 const systemPromptEl = document.getElementById("system-prompt") as HTMLTextAreaElement;
 const resetPromptBtn = document.getElementById("reset-prompt-btn") as HTMLButtonElement;
 const copyToClipboardEl = document.getElementById("copy-to-clipboard") as HTMLInputElement;
+
+// Work Item Summary Elements
+const adoAutoSummaryToggle = document.getElementById("ado-auto-summary") as HTMLInputElement;
+const adoAutoDelayInput = document.getElementById("ado-auto-delay") as HTMLInputElement;
+const adoSummaryPromptEl = document.getElementById("ado-summary-prompt") as HTMLTextAreaElement;
+const resetAdoPromptBtn = document.getElementById("reset-ado-prompt-btn") as HTMLButtonElement;
+const clearAdoCacheBtn = document.getElementById("clear-ado-cache-btn") as HTMLButtonElement;
+
 const saveBtn = document.getElementById("save-btn") as HTMLButtonElement;
 const saveStatus = document.getElementById("save-status") as HTMLSpanElement;
-const errorContainer = document.getElementById("error-container") as HTMLDivElement;
-
 const statusIndicator = document.getElementById("status-indicator") as HTMLDivElement;
 const statusText = document.getElementById("status-text") as HTMLParagraphElement;
 const progressContainer = document.getElementById("progress-container") as HTMLDivElement;
 const progressFill = document.getElementById("progress-fill") as HTMLDivElement;
 const progressPercent = document.getElementById("progress-percent") as HTMLSpanElement;
 
-// Mapping of family -> model IDs
+// Tab Switch Logic
+function switchTab(tab: "general" | "workitem") {
+  if (tab === "general") {
+    tabContentGeneral.style.display = "block";
+    tabContentWorkitem.style.display = "none";
+    tabBtnGeneral.style.borderBottom = "2px solid #0078d4";
+    tabBtnGeneral.style.opacity = "1";
+    tabBtnWorkitem.style.borderBottom = "none";
+    tabBtnWorkitem.style.opacity = "0.7";
+  } else {
+    tabContentGeneral.style.display = "none";
+    tabContentWorkitem.style.display = "block";
+    tabBtnWorkitem.style.borderBottom = "2px solid #0078d4";
+    tabBtnWorkitem.style.opacity = "1";
+    tabBtnGeneral.style.borderBottom = "none";
+    tabBtnGeneral.style.opacity = "0.7";
+  }
+}
+
+tabBtnGeneral?.addEventListener("click", () => switchTab("general"));
+tabBtnWorkitem?.addEventListener("click", () => switchTab("workitem"));
+
 let familyMap: Map<string, string[]> = new Map();
 
-function isVisionModel(modelId: string): boolean {
-  const id = modelId.toLowerCase();
-  return id.includes("vision") || id.includes("vl") || id.includes("llava") || id.includes("pixtral");
-}
-
-function isToolModel(modelId: string): boolean {
-  const id = modelId.toLowerCase();
-  return id.includes("hermes") || id.includes("function") || id.includes("tool") || id.includes("agent");
-}
-
-function getModelTags(modelId: string): string {
-  const tags: string[] = [];
-  if (isVisionModel(modelId)) tags.push("(vision)");
-  if (isToolModel(modelId)) tags.push("(tool)");
-  return tags.length > 0 ? ` ${tags.join(" ")}` : "";
-}
-
-function getFamilyTags(instances: string[]): string {
-  const tags: string[] = [];
-  if (instances.some(isVisionModel)) tags.push("(vision)");
-  if (instances.some(isToolModel)) tags.push("(tool)");
-  return tags.length > 0 ? ` ${tags.join(" ")}` : "";
+function getFamilyName(modelId: string): string {
+  const clean = modelId.split("/").pop() || modelId;
+  const parts = clean.split("-");
+  return parts[0] || clean;
 }
 
 function updateInstanceOptions(selectedFamily: string, selectedModelId?: string) {
@@ -70,7 +86,7 @@ function updateInstanceOptions(selectedFamily: string, selectedModelId?: string)
   instances.forEach((modelId) => {
     const opt = document.createElement("option");
     opt.value = modelId;
-    opt.textContent = `${modelId}${getModelTags(modelId)}`;
+    opt.textContent = modelId;
     instanceSelector.appendChild(opt);
   });
   if (selectedModelId && instances.includes(selectedModelId)) {
@@ -121,12 +137,6 @@ function toggleProviderUI() {
   }
 }
 
-function getFamilyName(modelId: string): string {
-  const clean = modelId.split("/").pop() || modelId;
-  const parts = clean.split("-");
-  return parts[0] || clean;
-}
-
 chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
   familyMap.clear();
   familySelector.innerHTML = "";
@@ -134,9 +144,15 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
   if (response?.models) {
     const allowedModels = response.models.filter((modelId: string) => {
       const id = modelId.toLowerCase();
+      // Completely exclude all Gemma-3 family and model variants
+      if (id.includes("gemma-3") || id.includes("gemma3") || id.includes("gemma_3")) return false;
+
       return (
-        id.includes("gemma-3") ||
-        id.includes("gemma3") ||
+        id.includes("qwen") ||
+        id.includes("gemma-2") ||
+        id.includes("gemma2") ||
+        id.includes("llama") ||
+        id.includes("phi") ||
         modelId === "Qwen3.5-0.8B-q4f16_1-MLC" ||
         modelId === "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
       );
@@ -153,7 +169,7 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
     familyMap.forEach((instances, family) => {
       const opt = document.createElement("option");
       opt.value = family;
-      opt.textContent = `${family}${getFamilyTags(instances)}`;
+      opt.textContent = family;
       familySelector.appendChild(opt);
     });
   }
@@ -176,6 +192,11 @@ chrome.runtime.sendMessage({ type: "getModelList" }, (response) => {
 
     openaiUrlInput.value = result.openaiCompatible?.url || DEFAULT_OPENAI_COMPATIBLE_URL;
     openaiModelInput.value = result.openaiCompatible?.model || DEFAULT_OPENAI_COMPATIBLE_MODEL;
+
+    // Work Item Summary settings
+    adoAutoSummaryToggle.checked = result.adoAutoSummary !== false;
+    adoAutoDelayInput.value = String(typeof result.adoAutoDelay === "number" ? result.adoAutoDelay : 1000);
+    adoSummaryPromptEl.value = result.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
 
     const localKeys = await chrome.storage.local.get(["openaiCompatibleKey"]);
     if (localKeys.openaiCompatibleKey) {
@@ -255,6 +276,26 @@ resetModelBtn.addEventListener("click", () => {
   updateResetButtons();
 });
 
+resetPromptBtn.addEventListener("click", () => {
+  systemPromptEl.value = DEFAULT_PROOFREAD_PROMPT;
+});
+
+resetAdoPromptBtn?.addEventListener("click", () => {
+  adoSummaryPromptEl.value = DEFAULT_ADO_SUMMARY_PROMPT;
+});
+
+clearAdoCacheBtn?.addEventListener("click", async () => {
+  const allKeys = await chrome.storage.local.get(null);
+  const cacheKeys = Object.keys(allKeys).filter((key) => key.startsWith("ado_summary_"));
+  if (cacheKeys.length > 0) {
+    await chrome.storage.local.remove(cacheKeys);
+  }
+  clearAdoCacheBtn.textContent = `✓ Cleared ${cacheKeys.length} summaries!`;
+  setTimeout(() => {
+    clearAdoCacheBtn.textContent = "🗑️ Clear Saved Ticket Summaries";
+  }, 2000);
+});
+
 loadModelBtn.addEventListener("click", () => {
   const modelId = instanceSelector.value;
   loadModelBtn.disabled = true;
@@ -274,10 +315,6 @@ loadModelBtn.addEventListener("click", () => {
   });
 });
 
-resetPromptBtn.addEventListener("click", () => {
-  systemPromptEl.value = DEFAULT_PROOFREAD_PROMPT;
-});
-
 saveBtn.addEventListener("click", async () => {
   const provider = providerSelect.value;
   const syncSettings = {
@@ -290,6 +327,9 @@ saveBtn.addEventListener("click", async () => {
     },
     systemPrompt: systemPromptEl.value,
     copyToClipboard: copyToClipboardEl.checked,
+    adoAutoSummary: adoAutoSummaryToggle.checked,
+    adoAutoDelay: parseInt(adoAutoDelayInput.value, 10) || 1000,
+    adoSummaryPrompt: adoSummaryPromptEl.value,
   };
 
   chrome.storage.sync.set(syncSettings, async () => {

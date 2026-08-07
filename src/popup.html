@@ -12,73 +12,106 @@
 
       <div id="error-container" class="status-text" style="display: none; color: #ff6b6b; margin-bottom: 8px;"></div>
 
-      <div class="section">
-        <label for="provider-select">Provider</label>
-        <select id="provider-select">
-          <option value="webllm" selected>Web-LLM (Local WebGPU)</option>
-          <option value="openaiCompatible">OpenAI Compatible API</option>
-        </select>
+      <!-- Tab Navigation Header -->
+      <div class="tab-header" style="display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 6px;">
+        <button id="tab-btn-general" class="tab-btn active" type="button" style="flex: 1; padding: 6px; font-weight: 600; cursor: pointer; border: none; background: transparent; border-bottom: 2px solid #0078d4;">⚙️ General & LLM</button>
+        <button id="tab-btn-workitem" class="tab-btn" type="button" style="flex: 1; padding: 6px; font-weight: 600; cursor: pointer; border: none; background: transparent; opacity: 0.7;">📋 Work Item Summary</button>
       </div>
 
-      <!-- WebLLM Section -->
-      <div id="webllm-group" class="section">
-        <div id="status-section">
-          <div id="status-indicator" class="status-badge">Not loaded</div>
-          <div id="progress-container" class="progress-container" style="display:none">
-            <div class="progress-bar">
-              <div id="progress-fill" class="progress-fill"></div>
+      <!-- General Settings Tab -->
+      <div id="tab-content-general" class="tab-content">
+        <div class="section">
+          <label for="provider-select">Provider</label>
+          <select id="provider-select">
+            <option value="webllm" selected>Web-LLM (Local WebGPU)</option>
+            <option value="openaiCompatible">OpenAI Compatible API</option>
+          </select>
+        </div>
+
+        <!-- WebLLM Section -->
+        <div id="webllm-group" class="section">
+          <div id="status-section">
+            <div id="status-indicator" class="status-badge">Not loaded</div>
+            <div id="progress-container" class="progress-container" style="display:none">
+              <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+              </div>
+              <span id="progress-percent" class="progress-percent">0%</span>
             </div>
-            <span id="progress-percent" class="progress-percent">0%</span>
+            <p id="status-text" class="status-text"></p>
           </div>
-          <p id="status-text" class="status-text"></p>
+
+          <label for="family-selection">Model Family</label>
+          <select id="family-selection"></select>
+
+          <label for="instance-selection" style="margin-top: 6px;">Model Instance</label>
+          <select id="instance-selection"></select>
+          <button id="load-model-btn" class="btn btn-primary" style="margin-top: 8px;">Load Model</button>
         </div>
 
-        <label for="family-selection">Model Family</label>
-        <select id="family-selection"></select>
+        <!-- OpenAI Compatible Section -->
+        <div id="openai-group" class="section" style="display: none;">
+          <label for="openai-key-input">API Key</label>
+          <input id="openai-key-input" type="password" placeholder="sk-..." class="input-field" />
 
-        <label for="instance-selection" style="margin-top: 6px;">Model Instance</label>
-        <select id="instance-selection"></select>
-        <button id="load-model-btn" class="btn btn-primary" style="margin-top: 8px;">Load Model</button>
-      </div>
+          <label for="openai-url-input" style="margin-top: 8px;">Base URL</label>
+          <div class="input-with-reset">
+            <input id="openai-url-input" type="text" placeholder="https://api.openai.com/v1" class="input-field" />
+            <button id="reset-url-btn" class="btn-reset" type="button" style="display: none;">Reset</button>
+          </div>
 
-      <!-- OpenAI Compatible Section -->
-      <div id="openai-group" class="section" style="display: none;">
-        <label for="openai-key-input">API Key</label>
-        <input id="openai-key-input" type="password" placeholder="sk-..." class="input-field" />
-
-        <label for="openai-url-input" style="margin-top: 8px;">Base URL</label>
-        <div class="input-with-reset">
-          <input id="openai-url-input" type="text" placeholder="https://api.openai.com/v1" class="input-field" />
-          <button id="reset-url-btn" class="btn-reset" type="button" style="display: none;">Reset</button>
+          <label for="openai-model-input" style="margin-top: 8px;">Model Name</label>
+          <div class="input-with-reset">
+            <input id="openai-model-input" type="text" placeholder="gpt-4o-mini" class="input-field" />
+            <button id="reset-model-btn" class="btn-reset" type="button" style="display: none;">Reset</button>
+          </div>
         </div>
 
-        <label for="openai-model-input" style="margin-top: 8px;">Model Name</label>
-        <div class="input-with-reset">
-          <input id="openai-model-input" type="text" placeholder="gpt-4o-mini" class="input-field" />
-          <button id="reset-model-btn" class="btn-reset" type="button" style="display: none;">Reset</button>
+        <div class="section">
+          <label for="system-prompt">Proofread System Prompt</label>
+          <textarea id="system-prompt" rows="3" placeholder="Proofreading prompt..."></textarea>
+          <button id="reset-prompt-btn" class="btn btn-secondary" style="margin-top: 6px;">Reset Proofread Prompt</button>
+        </div>
+
+        <div class="section">
+          <label class="toggle-label">
+            <input type="checkbox" id="copy-to-clipboard" />
+            <span>Copy to clipboard instead of replacing text</span>
+          </label>
         </div>
       </div>
 
-      <div class="section">
-        <label for="system-prompt">System Prompt</label>
-        <textarea id="system-prompt" rows="4" placeholder="Proofreading prompt..."></textarea>
-        <button id="reset-prompt-btn" class="btn btn-secondary" style="margin-top: 6px;">Reset to Default</button>
+      <!-- Work Item Summary Tab -->
+      <div id="tab-content-workitem" class="tab-content" style="display: none;">
+        <div class="section">
+          <label class="toggle-label">
+            <input type="checkbox" id="ado-auto-summary" />
+            <span>Auto-generate summary when opening Work Item</span>
+          </label>
+        </div>
+
+        <div class="section">
+          <label for="ado-auto-delay">Auto-run Delay (ms)</label>
+          <input id="ado-auto-delay" type="number" min="100" max="10000" step="100" value="1000" class="input-field" />
+        </div>
+
+        <div class="section">
+          <label for="ado-summary-prompt">Work Item Summary Prompt Template</label>
+          <textarea id="ado-summary-prompt" rows="5" placeholder="Summary prompt template..."></textarea>
+          <button id="reset-ado-prompt-btn" class="btn btn-secondary" style="margin-top: 6px;">Reset Summary Prompt</button>
+        </div>
+
+        <div class="section" style="margin-top: 14px;">
+          <button id="clear-ado-cache-btn" class="btn btn-secondary" style="color: #ef4444; border-color: rgba(239,68,68,0.3);">🗑️ Clear Saved Ticket Summaries</button>
+        </div>
       </div>
 
-      <div class="section">
-        <label class="toggle-label">
-          <input type="checkbox" id="copy-to-clipboard" />
-          <span>Copy to clipboard instead of replacing text</span>
-        </label>
-      </div>
-
-      <div class="section usage-info">
+      <div class="section usage-info" style="margin-top: 12px;">
         <p><strong>Usage:</strong></p>
         <ul>
           <li>Double-tap <kbd>Ctrl</kbd> on any text field to rewrite</li>
           <li>Right-click &rarr; "Proofread with WebLLM / OpenAI"</li>
-          <li><kbd>Escape</kbd> to cancel</li>
-          <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> for undo/redo</li>
+          <li>Azure DevOps: Automatic / Manual Work Item Summarizer</li>
         </ul>
       </div>
 
