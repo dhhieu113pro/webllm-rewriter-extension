@@ -982,26 +982,45 @@ class AdoWorkItemSummarizer {
   setupScrollAutoTrigger() {
     if (this._scrollAutoTriggered) return;
 
-    const onScroll = () => {
-      const scrollEl = document.scrollingElement || document.documentElement;
-      const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 100;
-      if (atBottom) {
-        document.removeEventListener("scroll", onScroll);
-        if (this._scrollAutoTriggered) return;
-        this._scrollAutoTriggered = true;
-        // Delay to let comments render, using configurable delay from settings (defaults to 4000ms)
-        setTimeout(() => {
-          const genBtn = document.getElementById("webllm-inline-generate-btn");
-          if (genBtn) genBtn.click();
-        }, this._autoDelay);
+    const onScroll = (event) => {
+      const target = event.target;
+      if (!target || target === document || target === document.documentElement) {
+        // Fallback to page-level scrolling if body scrolls
+        const scrollEl = document.scrollingElement || document.documentElement;
+        const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 120;
+        if (atBottom) {
+          document.removeEventListener("scroll", onScroll, { capture: true });
+          if (this._scrollAutoTriggered) return;
+          this._scrollAutoTriggered = true;
+          setTimeout(() => {
+            const genBtn = document.getElementById("webllm-inline-generate-btn");
+            if (genBtn) genBtn.click();
+          }, this._autoDelay);
+        }
+        return;
+      }
+
+      // Check if the scroll target is inside the work item form
+      const inWorkItem = target.closest?.(".work-item-view, .work-item-dialog, .work-item-form, .work-item-form-main-column");
+      if (inWorkItem) {
+        const atBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 120;
+        if (atBottom) {
+          document.removeEventListener("scroll", onScroll, { capture: true });
+          if (this._scrollAutoTriggered) return;
+          this._scrollAutoTriggered = true;
+          setTimeout(() => {
+            const genBtn = document.getElementById("webllm-inline-generate-btn");
+            if (genBtn) genBtn.click();
+          }, this._autoDelay);
+        }
       }
     };
 
-    document.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
 
     // Clean up if the work item changes
     this._cleanupScrollTrigger = () => {
-      document.removeEventListener("scroll", onScroll);
+      document.removeEventListener("scroll", onScroll, { capture: true });
     };
   }
 
