@@ -339,7 +339,7 @@ chrome.runtime.onConnect.addListener((port) => {
             {
               role: "system",
               content:
-                `You are a concise technical assistant. Summarize the Work Item in max 5 short bullet points using Markdown. Be brief. Output ONLY the summary, no extra commentary.`,
+                `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### Summary' (1-2 sentences about what the ticket is) and '### Solution' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary.`,
             },
             { role: "user", content: prompt },
           ];
