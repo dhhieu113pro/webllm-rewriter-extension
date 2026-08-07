@@ -322,65 +322,161 @@ chrome.runtime.onConnect.addListener((port) => {
 
       try {
         const config = await getConfig();
-        let prompt = "";
+        const template = config.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
+        const prompt = template
+          .replace("{description}", descriptionText || "(No description provided)")
+          .replace("{acceptance_criteria}", acceptanceCriteriaText || "(No acceptance criteria provided)")
+          .replace("{comments}", commentsText || "(No discussion comments)");
 
-        if (isVietnamese) {
-          prompt = `Tóm tắt chi tiết Work Item Azure DevOps sau đây bằng Tiếng Việt:
-
-### Tóm tắt
-(1-2 câu: tóm tắt nội dung ticket bằng Tiếng Việt)
-
-### Giải pháp
-(1-2 câu: giải pháp bằng Tiếng Việt)
-
-Work Item:
-Mô tả: ${descriptionText || "(Không có mô tả)"}
-Tiêu chí nghiệm thu: ${acceptanceCriteriaText || "(Không có tiêu chí nghiệm thu)"}
-Thảo luận & Bình luận: ${commentsText || "(Không có bình luận)"}
-
-LƯU Ý QUAN TRỌNG: Toàn bộ câu trả lời bắt buộc phải được viết bằng Tiếng Việt.`;
-        } else {
-          const template = config.adoSummaryPrompt || DEFAULT_ADO_SUMMARY_PROMPT;
-          prompt = template
-            .replace("{description}", descriptionText || "(No description provided)")
-            .replace("{acceptance_criteria}", acceptanceCriteriaText || "(No acceptance criteria provided)")
-            .replace("{comments}", commentsText || "(No discussion comments)");
-        }
+        let englishSummary = "";
 
         if (config.provider === "openaiCompatible") {
-          await handleOpenAIRequest(prompt, config, (res) => {
-            if (!aborted) port.postMessage(res);
-          });
+          if (isVietnamese) {
+            // Step 1: Generate English summary silently
+            const configManager = new ApiConfigManager(config);
+            configManager.validate();
+            const { apiUrl, headers, chosenModel } = configManager.getApiConfig();
+            
+            const response = await fetch(apiUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                model: chosenModel,
+                stream: false,
+                messages: [
+                  {
+                    role: "system",
+                    content: "You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### Summary' (1-2 sentences about what the ticket is) and '### Solution' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary."
+                  },
+                  { role: "user", content: prompt }
+                ]
+              })
+            });
+
+            if (!response.ok) {
+              const errTxt = await response.text();
+              throw new Error(`OpenAI error: ${response.status} ${errTxt}`);
+            }
+
+            const data = await response.json();
+            englishSummary = data?.choices?.[0]?.message?.content || "";
+
+            // Step 2: Translate English summary to Vietnamese and stream it
+            const translatePrompt = `Dịch văn bản sau sang Tiếng Việt. Giữ nguyên định dạng Markdown và dịch chính xác nội dung của 2 phần '### Tóm tắt' (từ '### Summary') và '### Giải pháp' (từ '### Solution'):\n\n${englishSummary}`;
+            
+            const translateResponse = await fetch(apiUrl, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                model: chosenModel,
+                stream: true,
+                messages: [
+                  { role: "system", content: "You are a professional translator. Translate the text accurately to Vietnamese." },
+                  { role: "user", content: translatePrompt }
+                ]
+              })
+            });
+
+            if (!translateResponse.ok) {
+              const errTxt = await translateResponse.text();
+              throw new Error(`Translation error: ${translateResponse.status} ${errTxt}`);
+            }
+
+            if (!translateResponse.body) throw new Error("Translation body is null");
+
+            const reader = translateResponse.body.getReader();
+            const streamHandler = new StreamHandler();
+            for await (const chunk of streamHandler.generateChunks(reader)) {
+              if (aborted) break;
+              streamHandler.processChunk(chunk, (res) => {
+                if (!aborted) port.postMessage(res);
+              });
+            }
+            const remaining = streamHandler.getRemainingBuffer();
+            if (remaining && !aborted) {
+              port.postMessage({ chunk: remaining, done: false });
+            }
+            if (!aborted) {
+              port.postMessage({ done: true });
+            }
+          } else {
+            // Normal English summary streaming
+            await handleOpenAIRequest(prompt, config, (res) => {
+              if (!aborted) port.postMessage(res);
+            });
+          }
         } else {
           const llmEngine = await ensureEngine();
-          
-          const systemPrompt = isVietnamese
-            ? "Bạn là một trợ lý kỹ thuật ngắn gọn. Chỉ xuất ra chính xác 2 phần Markdown: '### Tóm tắt' (1-2 câu tóm tắt nội dung ticket) và '### Giải pháp' (1-2 câu về giải pháp). Không thêm bất kỳ phần nào khác. Không sử dụng gạch đầu dòng. Không viết tiếng Anh, chỉ viết tiếng Việt."
-            : `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### ${headerSummary}' (1-2 sentences about what the ticket is) and '### ${headerSolution}' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary. Respond entirely in ${langName}.`;
 
-          const messages: ChatCompletionMessageParam[] = [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            { role: "user", content: prompt },
-          ];
+          if (isVietnamese) {
+            // Step 1: Generate English summary silently
+            const messages: ChatCompletionMessageParam[] = [
+              {
+                role: "system",
+                content: "You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### Summary' (1-2 sentences about what the ticket is) and '### Solution' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary."
+              },
+              { role: "user", content: prompt }
+            ];
 
-          const completion = await llmEngine.chat.completions.create({
-            stream: true,
-            messages,
-          });
+            const completion = await llmEngine.chat.completions.create({
+              stream: false,
+              messages
+            });
 
-          for await (const chunk of completion) {
-            if (aborted) break;
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-              port.postMessage({ chunk: content, done: false });
+            englishSummary = completion.choices[0]?.message?.content || "";
+
+            // Step 2: Translate English summary to Vietnamese and stream it
+            const translatePrompt = `Dịch văn bản sau sang Tiếng Việt. Giữ nguyên định dạng Markdown và dịch chính xác nội dung của 2 phần '### Tóm tắt' (từ '### Summary') và '### Giải pháp' (từ '### Solution'):\n\n${englishSummary}`;
+            
+            const translateMessages: ChatCompletionMessageParam[] = [
+              { role: "system", content: "You are a professional translator. Translate the text accurately to Vietnamese." },
+              { role: "user", content: translatePrompt }
+            ];
+
+            const translateCompletion = await llmEngine.chat.completions.create({
+              stream: true,
+              messages: translateMessages
+            });
+
+            for await (const chunk of translateCompletion) {
+              if (aborted) break;
+              const content = chunk.choices[0]?.delta?.content;
+              if (content) {
+                port.postMessage({ chunk: content, done: false });
+              }
             }
-          }
 
-          if (!aborted) {
-            port.postMessage({ done: true });
+            if (!aborted) {
+              port.postMessage({ done: true });
+            }
+          } else {
+            // Normal English summary streaming
+            const systemPrompt = `You are a concise technical assistant. Output ONLY exactly 2 Markdown sections: '### ${headerSummary}' (1-2 sentences about what the ticket is) and '### ${headerSolution}' (1-2 sentences about what is being done). No other sections. No bullet points. No extra commentary. Respond entirely in ${langName}.`;
+
+            const messages: ChatCompletionMessageParam[] = [
+              {
+                role: "system",
+                content: systemPrompt,
+              },
+              { role: "user", content: prompt },
+            ];
+
+            const completion = await llmEngine.chat.completions.create({
+              stream: true,
+              messages,
+            });
+
+            for await (const chunk of completion) {
+              if (aborted) break;
+              const content = chunk.choices[0]?.delta?.content;
+              if (content) {
+                port.postMessage({ chunk: content, done: false });
+              }
+            }
+
+            if (!aborted) {
+              port.postMessage({ done: true });
+            }
           }
         }
       } catch (error: any) {
